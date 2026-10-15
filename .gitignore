@@ -22,6 +22,17 @@ config/*.json
 *.pem
 *.key
 
+# Terraform: provider downloads, state, and real variable values stay local.
+# .terraform.lock.hcl IS committed so everyone gets the same provider version.
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+!*.tfvars.example
+crash.log
+crash.*.log
+
 # Python and Node leftovers
 .venv/
 __pycache__/

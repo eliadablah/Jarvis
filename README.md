@@ -43,6 +43,7 @@ I'm building Jarvis as a hands-on DevOps project: I put it together, locked it d
 ## Repo layout
 
 ```text
+infra/       Terraform for AWS (bootstrap: state bucket + GitHub deploy roles)
 config/      Settings templates with placeholders (copy, rename, fill in)
 docs/        Setup guide and the dev/prod environment plan
 CHANGELOG.md What changed and when
