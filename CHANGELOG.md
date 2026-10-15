@@ -2,6 +2,17 @@
 
 ## 2026-10-15
 
+### Docs - Dev to prod release flow
+
+- Rewrote `docs/environments.md` around the dev → prod flow: `dev` branch and `jarvis-dev` for testing, `main` and `jarvis-prod` for daily use, prod changes only through an approved merge.
+- README: added a "How I ship changes" section, updated the repo layout, and made the roadmap match what is actually built.
+
+### Infra - Dev environment
+
+- Added `infra/envs/dev`: `jarvis-dev` from the same server module as prod, `micro_3_0` ($7/month, billed hourly), `tag:dev`, no snapshots, built to test and destroyed after.
+- Separate state key (`envs/dev/terraform.tfstate`) in the shared bucket.
+- Validation: `terraform fmt -check` and `terraform validate` pass. Not applied yet.
+
 ### Infra - Prod server (Terraform)
 
 - Added `infra/modules/server`: a Lightsail instance that joins my Tailscale network on first boot with a single-use, 1-hour, `tag:prod` key, then installs security auto-updates, Docker, and a limited `deploy` user.

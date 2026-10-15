@@ -2,7 +2,7 @@
 
 My personal AI assistant. I talk to it out loud, it remembers what I'm working on, and it can take real actions on my machine, but only after it asks me first.
 
-I'm building Jarvis as a hands-on DevOps project: I put it together, locked it down, and I'm moving it from my PC to the cloud with separate dev and prod environments.
+I'm building Jarvis as a hands-on DevOps project: I put it together, locked it down, and I'm moving it from my PC to the cloud with Terraform, separate dev and prod environments, and a dev → prod release flow.
 
 ## What it does
 
@@ -19,12 +19,20 @@ I'm building Jarvis as a hands-on DevOps project: I put it together, locked it d
 | Memory | Obsidian vault | Raw (inbox) → Wiki (clean notes) → Outputs (finished reports) |
 | Voice | Local speech-to-text and text-to-speech | Push-to-talk, British male voice, ask-before-acting |
 | Face | Browser visualizer | Full-screen circuit-board scene |
-| Hosting | My PC (dev), AWS Lightsail (prod) | See [docs/environments.md](docs/environments.md) |
+| Servers | AWS Lightsail, built with Terraform | `jarvis-dev` for testing, `jarvis-prod` for daily use |
+
+## How I ship changes
+
+```text
+dev branch  →  test on jarvis-dev  →  pull request  →  main branch  →  approve  →  jarvis-prod
+```
+
+Nothing reaches prod without passing through dev first. Details in [docs/environments.md](docs/environments.md).
 
 ## Security decisions
 
 - **Ask-first permissions.** I turned off the "do anything without asking" mode. Jarvis has to ask out loud before any real action.
-- **Nothing public.** In prod, no TCP port is open to the internet: not SSH, not HTTP, not HTTPS. The only open port is Tailscale's encrypted UDP port, which answers only my own devices. Everything else goes through my private Tailscale network.
+- **Nothing public.** On both servers, no TCP port is open to the internet: not SSH, not HTTP, not HTTPS. The only open port is Tailscale's encrypted UDP port, which answers only my own devices. Everything else goes through my private Tailscale network.
 - **Least-privilege network rules.** The GitHub deploy robot can only reach the server over SSH, and the server can't reach my PC or phone at all.
 - **No secrets in git.** Real settings and tokens stay on the machine. This repo only has `.example` files with placeholders.
 - **Budget guardrail.** An AWS Budgets alert fires at $15/month.
@@ -34,12 +42,16 @@ I'm building Jarvis as a hands-on DevOps project: I put it together, locked it d
 - [x] Run Jarvis locally (voice, face, memory)
 - [x] Restructure the vault into Raw / Wiki / Outputs
 - [x] Switch voice permissions to ask-first
-- [ ] Lightsail server + Tailscale + firewall locked shut
+- [x] AWS budget alert at $15/month
+- [x] Terraform foundation: encrypted state bucket, GitHub deploy roles with no stored AWS keys
+- [x] Private Tailscale network with tagged, least-privilege rules
+- [x] Terraform for dev and prod servers (written, not built yet)
+- [ ] Build and test `jarvis-dev`, then `jarvis-prod`
+- [ ] Docker container for the server app
+- [ ] GitHub Actions: checks on every push, automatic dev deploys, approval-gated prod deploys
 - [ ] `jarvis.eliadablah.com` pointing at prod, reachable only on my private network
-- [ ] Dev → prod deploys through git branches
 - [ ] Vault sync through a private repo
 - [ ] Phone dashboard with browser voice
-- [ ] Snapshots, auto security updates, budget alerts
 
 ## Repo layout
 
@@ -47,7 +59,8 @@ I'm building Jarvis as a hands-on DevOps project: I put it together, locked it d
 infra/       Terraform for AWS
   bootstrap/       state bucket + GitHub deploy roles (one-time)
   modules/server/  reusable Lightsail server that joins Tailscale on first boot
-  envs/prod/       the jarvis-prod server
+  envs/dev/        jarvis-dev, the temporary test server
+  envs/prod/       jarvis-prod, the always-on server
 config/      Settings templates with placeholders (copy, rename, fill in)
 docs/        Setup guide and the dev/prod environment plan
 CHANGELOG.md What changed and when

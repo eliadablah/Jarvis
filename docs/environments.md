@@ -1,23 +1,35 @@
 # Environments: dev and prod
 
-I run two copies of Jarvis so I can try changes without breaking the one I rely on.
+I run two copies of Jarvis's server so I can test a change before it touches the one I rely on. Dev is the test kitchen; prod is the dining room.
+
+Both servers are built from the same Terraform blueprint (`infra/modules/server`), so if something works on dev, prod gets built exactly the same way.
 
 | | Dev | Prod |
 |---|---|---|
-| Where | My Windows PC | AWS Lightsail, N. Virginia (`us-east-1`), Ubuntu 24.04, 2 GB RAM |
-| Built by | Docker Compose | Terraform (`infra/envs/prod`) |
-| Address | `localhost` on the PC, `dev.jarvis.eliadablah.com` on my tailnet | `jarvis.eliadablah.com` on my tailnet |
 | Git branch | `dev` | `main` |
-| Purpose | Try new settings, prompts, and dashboard code | The Jarvis I actually use day to day |
-| Permissions | Ask-first | Allowlist: read/write the vault and run git; everything else asks |
+| Terraform folder | `infra/envs/dev` | `infra/envs/prod` |
+| Server | `jarvis-dev` | `jarvis-prod` |
+| Where | AWS Lightsail, N. Virginia (`us-east-1a`), Ubuntu 24.04 | Same |
+| Size | 1 GB RAM, $7/month, billed hourly | 2 GB RAM, $12/month |
+| Lifetime | Built to test, destroyed after | Always on |
+| Snapshots | Off | Daily, last 7 kept |
+| Tailscale tag | `tag:dev` | `tag:prod` |
+| Address (planned) | `dev.jarvis.eliadablah.com` on my tailnet | `jarvis.eliadablah.com` on my tailnet |
+| Who can change it | Any push to `dev` (once CI/CD exists) | Only a merge to `main`, after I approve it in GitHub |
+
+For quick app work I can also run the containers on my own PC with Docker Compose before anything touches a server.
 
 ## How a change gets to prod
 
-1. I make the change on the `dev` branch and test it on my PC.
-2. When it works, I open a pull request from `dev` into `main` and review the diff.
-3. I merge it, and the prod server pulls `main` and restarts Jarvis.
+1. **Work on `dev`.** I commit early and often there, including work in progress.
+2. **Test on dev.** I build `jarvis-dev`, check that the change works, then destroy it.
+3. **Pull request.** I open a pull request from `dev` into `main` and review the diff.
+4. **Merge and approve.** Merging to `main` is the only way prod changes, and prod changes wait for my approval.
 
-Later, step 3 becomes a GitHub Actions job that deploys over Tailscale, so prod only changes when `main` changes.
+Right now steps 2 and 4 run from my PC with Terraform. Next, GitHub Actions takes them over:
+
+- Push to `dev` → check the code, build the Docker image, update dev.
+- Merge to `main` → wait for my approval in the `production` environment → update prod.
 
 ## The domain
 
@@ -35,5 +47,5 @@ If I later need Jarvis from a computer that isn't mine, I'll add Cloudflare Acce
 
 | Name | Type | Points to |
 |---|---|---|
-| `jarvis` | A | Prod server's Tailscale IP |
-| `dev.jarvis` | A | My PC's Tailscale IP |
+| `jarvis` | A | `jarvis-prod`'s Tailscale IP |
+| `dev.jarvis` | A | `jarvis-dev`'s Tailscale IP (only while dev exists) |
