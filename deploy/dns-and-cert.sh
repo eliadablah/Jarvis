@@ -53,9 +53,9 @@ else
     -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_SESSION_TOKEN \
     -e AWS_REGION=us-east-1 \
     -e AWS_HOSTED_ZONE_ID="$ROUTE53_ZONE_ID" \
-    -v "$PWD/.lego:/lego" \
+    -v "$PWD/.lego:/data" \
     "$lego_image" \
-    --accept-tos --path /lego --dns route53 --domains "$domain" run
+    --accept-tos --path /data --dns route53 --domains "$domain" run
 
   cp ".lego/certificates/$domain.crt" certs/fullchain.pem
   cp ".lego/certificates/$domain.key" certs/key.pem
