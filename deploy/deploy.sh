@@ -8,6 +8,8 @@
 #
 # Needs GHCR_USER and GHCR_TOKEN in the environment: a short-lived token the
 # server uses once to pull the image, then logs out again.
+# Needs CLAUDE_CODE_OAUTH_TOKEN: the one-year Claude Code login, written to
+# a root-only .env on the server (never into the image or the repo).
 set -euo pipefail
 
 host="$1"
@@ -16,6 +18,7 @@ image_tag="$3"
 domain="$4"
 : "${GHCR_USER:?GHCR_USER is required}"
 : "${GHCR_TOKEN:?GHCR_TOKEN is required}"
+: "${CLAUDE_CODE_OAUTH_TOKEN:?CLAUDE_CODE_OAUTH_TOKEN is required}"
 
 # Resolve the server's Tailscale address (CI may not use MagicDNS names).
 ip="$(tailscale ip -4 "$host")"
@@ -31,6 +34,9 @@ ssh "${ssh_opts[@]}" "$target" 'cat > ~/jarvis/compose.yaml' < deploy/compose.ya
 ssh "${ssh_opts[@]}" "$target" 'cat > ~/jarvis/Caddyfile' < deploy/Caddyfile
 ssh "${ssh_opts[@]}" "$target" 'cat > ~/jarvis/certs/fullchain.pem' < certs/fullchain.pem
 ssh "${ssh_opts[@]}" "$target" 'umask 077 && cat > ~/jarvis/certs/key.pem' < certs/key.pem
+# The token travels over stdin and lands in a file only the deploy user can read.
+printf 'CLAUDE_CODE_OAUTH_TOKEN=%s\n' "$CLAUDE_CODE_OAUTH_TOKEN" \
+  | ssh "${ssh_opts[@]}" "$target" 'umask 077 && cat > ~/jarvis/.env'
 
 # --- 2. Pull the new image (log in only for the pull) and restart ---
 # The values below are filled in here on the runner on purpose, then sent

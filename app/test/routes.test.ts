@@ -6,7 +6,12 @@ import assert from "node:assert/strict";
 import { handleRequest } from "../src/routes.ts";
 import { loadConfig, type AppConfig } from "../src/config.ts";
 
-const config: AppConfig = { port: 3000, env: "dev", version: "abc1234" };
+const config: AppConfig = {
+  port: 3000,
+  env: "dev",
+  version: "abc1234",
+  claude: { bin: "claude", model: "opus", personaPath: "persona/jarvis.md", workDir: "/tmp", timeoutMs: 1000 },
+};
 
 test("health check reports ok with env and version", () => {
   const res = handleRequest("GET", "/healthz", config);
@@ -14,19 +19,21 @@ test("health check reports ok with env and version", () => {
   assert.deepEqual(JSON.parse(res.body), { status: "ok", env: "dev", version: "abc1234" });
 });
 
-test("home page shows the environment and version", () => {
+test("home page is the chat, showing environment and version", () => {
   const res = handleRequest("GET", "/", config);
   assert.equal(res.status, 200);
   assert.match(res.contentType, /text\/html/);
   assert.match(res.body, /Dev/);
   assert.match(res.body, /abc1234/);
+  assert.match(res.body, /id="chat-form"/);
+  assert.match(res.body, /src="\/chat\.js"/);
 });
 
 test("unknown paths return 404", () => {
   assert.equal(handleRequest("GET", "/nope", config).status, 404);
 });
 
-test("only GET and HEAD are allowed", () => {
+test("only GET and HEAD are allowed on pages", () => {
   assert.equal(handleRequest("POST", "/", config).status, 405);
 });
 
@@ -38,10 +45,25 @@ test("home page escapes the version string", () => {
 
 test("config falls back to safe defaults", () => {
   const cfg = loadConfig({ PORT: "abc", APP_ENV: "staging" });
-  assert.deepEqual(cfg, { port: 3000, env: "local", version: "unknown" });
+  assert.equal(cfg.port, 3000);
+  assert.equal(cfg.env, "local");
+  assert.equal(cfg.version, "unknown");
+  assert.equal(cfg.claude.bin, "claude");
+  assert.equal(cfg.claude.model, "opus");
+  assert.equal(cfg.claude.timeoutMs, 300000);
 });
 
 test("config reads real values", () => {
-  const cfg = loadConfig({ PORT: "8080", APP_ENV: "prod", APP_VERSION: " 1a2b3c " });
-  assert.deepEqual(cfg, { port: 8080, env: "prod", version: "1a2b3c" });
+  const cfg = loadConfig({
+    PORT: "8080",
+    APP_ENV: "prod",
+    APP_VERSION: " 1a2b3c ",
+    CLAUDE_MODEL: "sonnet",
+    JARVIS_WORKDIR: "/home/node/workspace",
+  });
+  assert.equal(cfg.port, 8080);
+  assert.equal(cfg.env, "prod");
+  assert.equal(cfg.version, "1a2b3c");
+  assert.equal(cfg.claude.model, "sonnet");
+  assert.equal(cfg.claude.workDir, "/home/node/workspace");
 });

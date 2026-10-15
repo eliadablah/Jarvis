@@ -1,7 +1,8 @@
 # How the Jarvis web app runs on a server (jarvis-dev or jarvis-prod).
-# The deploy workflow copies this file, the Caddyfile, and the certificate
-# to /home/deploy/jarvis/, sets IMAGE_TAG, APP_ENV, and SITE_ADDRESS, then
-# runs `docker compose pull && docker compose up -d`.
+# The deploy workflow copies this file, the Caddyfile, the certificate, and
+# a root-only .env (the Claude Code token) to /home/deploy/jarvis/, sets
+# IMAGE_TAG, APP_ENV, and SITE_ADDRESS, then runs
+# `docker compose pull && docker compose up -d`.
 #
 # Ports 80 and 443 on the server are only reachable over Tailscale: the
 # Lightsail firewall has no TCP ports open to the internet.
@@ -13,9 +14,16 @@ services:
     restart: unless-stopped
     environment:
       APP_ENV: ${APP_ENV:?APP_ENV is required}
+    # CLAUDE_CODE_OAUTH_TOKEN lives only in this file on the server.
+    env_file: .env
     expose:
       - "3000"
     read_only: true
+    tmpfs:
+      - /tmp
+    volumes:
+      # Claude Code's conversation history, kept across restarts.
+      - claude_home:/home/node
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -42,5 +50,6 @@ services:
       - no-new-privileges:true
 
 volumes:
+  claude_home:
   caddy_data:
   caddy_config:

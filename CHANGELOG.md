@@ -2,6 +2,16 @@
 
 ## 2026-10-15
 
+### App - Text chat with Jarvis
+
+- The home page is now a chat: type a message, Jarvis's answer streams in word by word, and follow-up questions continue the same conversation (session ID kept in the browser).
+- `POST /api/chat` runs Claude Code headless (`claude -p --output-format stream-json --include-partial-messages`) with the Jarvis persona appended to its system prompt (`app/persona/jarvis.md`).
+- Locked down for this first version: `--tools ""` (no built-in tools at all), `--disallowedTools "mcp__*"`, `--permission-mode dontAsk`, `--permission-prompts none`. The message goes in on stdin and the session ID must be a UUID, so neither can inject a command-line flag.
+- Requests from other websites are refused: a custom header plus a JSON body forces a CORS preflight the server never grants, and a mismatched `Origin` is rejected. One answer runs at a time; answers stop after 5 minutes or when the browser disconnects.
+- Image: Debian slim base (Claude Code ships a glibc binary), Claude Code pinned to the stable release 2.1.292, auto-update and telemetry off. Conversation history lives in a Docker volume.
+- Auth: the one-year `claude setup-token` login is stored as GitHub secret `CLAUDE_CODE_OAUTH_TOKEN` and written by the deploy to a deploy-user-only `.env` on the server. It is never in the image or the repo.
+- Tests: 24 passing (stream parsing, command-line safety, request checks, routing, config). Local end-to-end run reached Claude Code and displayed its error cleanly (this PC's own Claude Code login had expired); the full answer path gets verified on dev.
+
 ### Test - HTTPS on dev
 
 - Deploy `5930e74` succeeded: DNS `dev-jarvis.eliadablah.com -> 100.65.48.56`, new Let's Encrypt certificate valid until 2027-01-13, health check over HTTPS returned the new version.
