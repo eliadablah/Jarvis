@@ -2,6 +2,12 @@
 
 ## 2026-10-15
 
+### Test - HTTPS on dev
+
+- Deploy `5930e74` succeeded: DNS `dev-jarvis.eliadablah.com -> 100.65.48.56`, new Let's Encrypt certificate valid until 2027-01-13, health check over HTTPS returned the new version.
+- `https://dev-jarvis.eliadablah.com` loads with a valid certificate on my tailnet; `http://jarvis-dev` returns 301 to it.
+- One more fix along the way: lego's working folder is mounted at `/data`, because `/lego` in its image is the program itself.
+
 ### Fix - GitHub identity format and dev domain name
 
 - The first HTTPS deploy failed at "Sign in to AWS": this repo uses GitHub's immutable OIDC subject format (`repo:eliadablah@232940632/Jarvis@1421100534:...`, owner and repo IDs included), but the roles trusted the old `repo:eliadablah/Jarvis:...` format. All three robot roles (plan, apply, dns) now use the immutable prefix, set once in `github_oidc_subject_prefix`.
