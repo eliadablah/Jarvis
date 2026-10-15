@@ -1,0 +1,22 @@
+# Caddy sits in front of the Jarvis web app and serves HTTPS.
+# The certificate comes from CI (deploy/dns-and-cert.sh), not from Caddy:
+# the server is never reachable from the public internet, and it holds no
+# AWS credentials, so it can't prove domain ownership by itself.
+# Ports 80 and 443 are only reachable over Tailscale.
+
+{
+	auto_https off
+	admin off
+}
+
+https://{$SITE_ADDRESS} {
+	tls /certs/fullchain.pem /certs/key.pem
+	encode gzip
+	header Strict-Transport-Security "max-age=31536000"
+	reverse_proxy web:3000
+}
+
+# Anything on plain HTTP (including http://jarvis-dev) goes to the HTTPS name.
+http:// {
+	redir https://{$SITE_ADDRESS}{uri} permanent
+}

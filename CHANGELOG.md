@@ -2,6 +2,20 @@
 
 ## 2026-10-15
 
+### Deploy - HTTPS on my own domain
+
+- Each deploy points `dev.jarvis.eliadablah.com` (or `jarvis.eliadablah.com` for prod) at the server's Tailscale address in Route 53. The address changes when dev is rebuilt, so every deploy refreshes it. TTL is 60 seconds.
+- `deploy/dns-and-cert.sh`: CI gets a Let's Encrypt certificate with a DNS challenge (lego v4.35.2), stores it in the certificate bucket, and reuses it until it's within 30 days of expiring, so rebuilding dev doesn't hit Let's Encrypt's weekly limits.
+- Caddy 2.11.7 runs in front of the app with that certificate; plain HTTP (including `http://jarvis-dev`) redirects to the HTTPS name. The app is no longer published directly.
+- The deploy health check now goes through HTTPS on the server, proving Caddy, the certificate, and the app work together.
+- The servers still hold no AWS credentials and still have no TCP ports open to the internet.
+
+### Infra - DNS role and certificate bucket
+
+- Bootstrap adds the `jarvis-github-dns` role: only the `dev` and `production` GitHub environments can assume it, and it can only change A and TXT records for the two Jarvis names (plus their `_acme-challenge` records). The other records in the zone are untouched.
+- Adds the private, encrypted `jarvis-certs-<account>` bucket for certificates.
+- Applied: 6 added, 0 changed, 0 destroyed. GitHub variables added: `AWS_DNS_ROLE_ARN`, `CERT_BUCKET`, `ROUTE53_ZONE_ID`.
+
 ### CI/CD - First deploy to dev
 
 - First push with the pipeline deployed `9ac0466` to `jarvis-dev`: health check returned `{"status":"ok","env":"dev","version":"9ac0466"}`, and `http://jarvis-dev` shows the Jarvis page as Dev on my tailnet.

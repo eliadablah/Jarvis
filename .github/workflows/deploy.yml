@@ -63,15 +63,26 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+  # Both deploy jobs: join Tailscale, sign in to AWS with a short-lived OIDC
+  # token (DNS + certificates only), point the name at the server, make sure
+  # the certificate is valid, then ship and restart.
+
   deploy-dev:
     name: Deploy to jarvis-dev
     if: github.ref == 'refs/heads/dev'
     needs: build
     runs-on: ubuntu-latest
-    environment: dev
+    environment:
+      name: dev
+      url: https://dev.jarvis.eliadablah.com
     permissions:
       contents: read
       packages: read
+      id-token: write
+    env:
+      HOST: jarvis-dev
+      APP_ENV: dev
+      DOMAIN: dev.jarvis.eliadablah.com
     steps:
       - uses: actions/checkout@v4
 
@@ -82,21 +93,40 @@ jobs:
           oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
           tags: tag:ci
 
+      - name: Sign in to AWS (DNS and certificates only)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DNS_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: DNS and certificate
+        env:
+          CERT_BUCKET: ${{ vars.CERT_BUCKET }}
+          ROUTE53_ZONE_ID: ${{ vars.ROUTE53_ZONE_ID }}
+        run: bash deploy/dns-and-cert.sh "$HOST" "$DOMAIN"
+
       - name: Deploy
         env:
           GHCR_USER: ${{ github.actor }}
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: bash deploy/deploy.sh jarvis-dev dev "${{ needs.build.outputs.tag }}"
+        run: bash deploy/deploy.sh "$HOST" "$APP_ENV" "${{ needs.build.outputs.tag }}" "$DOMAIN"
 
   deploy-prod:
     name: Deploy to jarvis-prod
     if: github.ref == 'refs/heads/main'
     needs: build
     runs-on: ubuntu-latest
-    environment: production
+    environment:
+      name: production
+      url: https://jarvis.eliadablah.com
     permissions:
       contents: read
       packages: read
+      id-token: write
+    env:
+      HOST: jarvis-prod
+      APP_ENV: prod
+      DOMAIN: jarvis.eliadablah.com
     steps:
       - uses: actions/checkout@v4
 
@@ -107,8 +137,20 @@ jobs:
           oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
           tags: tag:ci
 
+      - name: Sign in to AWS (DNS and certificates only)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DNS_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: DNS and certificate
+        env:
+          CERT_BUCKET: ${{ vars.CERT_BUCKET }}
+          ROUTE53_ZONE_ID: ${{ vars.ROUTE53_ZONE_ID }}
+        run: bash deploy/dns-and-cert.sh "$HOST" "$DOMAIN"
+
       - name: Deploy
         env:
           GHCR_USER: ${{ github.actor }}
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: bash deploy/deploy.sh jarvis-prod prod "${{ needs.build.outputs.tag }}"
+        run: bash deploy/deploy.sh "$HOST" "$APP_ENV" "${{ needs.build.outputs.tag }}" "$DOMAIN"
