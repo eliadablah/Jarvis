@@ -2,12 +2,20 @@
 
 ## 2026-10-15
 
+### Test - jarvis-dev end-to-end
+
+- Third `jarvis-dev` build (single-line launch script) joined Tailscale about 2 minutes after creation as `tag:dev`, confirming the launch-script fix.
+- Firewall: only UDP 41641 open. `tailscale ping` connected directly through that port (51 ms) instead of through a relay.
+- Logged in with `ssh ubuntu@jarvis-dev` over Tailscale SSH, with no SSH port open to the internet.
+- `/var/log/jarvis-boot.log` ends with `jarvis boot: finished`; Docker 29.1.3 installed; `deploy` user exists in the `docker` group with no sudo.
+- Noted: the updates installed a new kernel, so the server reports "System restart required" after first boot.
+
 ### Fix - Single-line launch script
 
 - The second `jarvis-dev` build also never joined Tailscale, even with Tailscale moved first. Both failed scripts started with a `#!/bin/bash` line that does nothing on its own, which fits a known Lightsail + Terraform problem where only the first line of a multi-line launch script runs.
 - The boot script now travels base64-encoded inside a single sh-compatible line that unpacks it to a root-only file, runs it with bash, and deletes it.
 - Tested in WSL Ubuntu: the launcher is one line, passes `sh -n`, unpacks to a script that passes `bash -n`, with the key, hostname, and tag in place.
-- Root cause not confirmed from server logs yet (no way in while TCP ports are closed); the next build will show it in `/var/log/jarvis-boot.log`.
+- Confirmed by the next build: with the single-line launcher, the server joined Tailscale and the boot script ran to completion.
 
 ### Fix - Server first-boot script
 

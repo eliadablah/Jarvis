@@ -45,8 +45,9 @@ Nothing reaches prod without passing through dev first. Details in [docs/environ
 - [x] AWS budget alert at $15/month
 - [x] Terraform foundation: encrypted state bucket, GitHub deploy roles with no stored AWS keys
 - [x] Private Tailscale network with tagged, least-privilege rules
-- [x] Terraform for dev and prod servers (written, not built yet)
-- [ ] Build and test `jarvis-dev`, then `jarvis-prod`
+- [x] Terraform for dev and prod servers
+- [x] Build and test `jarvis-dev`: joins Tailscale on first boot, SSH only through Tailscale, Docker ready
+- [ ] Build `jarvis-prod` from the same tested blueprint
 - [ ] Docker container for the server app
 - [ ] GitHub Actions: checks on every push, automatic dev deploys, approval-gated prod deploys
 - [ ] `jarvis.eliadablah.com` pointing at prod, reachable only on my private network
