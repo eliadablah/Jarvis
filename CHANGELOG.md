@@ -2,6 +2,20 @@
 
 ## 2026-10-15
 
+### Fix - Server first-boot script
+
+- Found on the first `jarvis-dev` build: the server came up with the firewall correct but never joined Tailscale. With every TCP port closed, there was no way in to read the logs.
+- The script now joins Tailscale first, so a later failure still leaves the server reachable.
+- Waits up to 10 minutes for Ubuntu's own first-boot updates to release the package lock instead of failing (most likely cause of the original failure).
+- Keeps existing config files on upgrade instead of stopping at a prompt, and avoids restart prompts.
+- Logs everything to `/var/log/jarvis-boot.log`.
+
+### Infra - Tailscale tag ownership
+
+- Tailscale OAuth credentials require every key they create to carry all of the credential's tags, so a credential holding `tag:ci`, `tag:dev`, and `tag:prod` couldn't create a `tag:dev`-only key.
+- The credential now holds only `tag:ci`, and the tailnet policy makes `tag:ci` an owner of `tag:dev` and `tag:prod`, so it can create keys for either server.
+- Tradeoff: a `tag:ci` device could tag itself `tag:dev` or `tag:prod`. The only `tag:ci` devices are short-lived GitHub Actions runners.
+
 ### Docs - Dev to prod release flow
 
 - Rewrote `docs/environments.md` around the dev → prod flow: `dev` branch and `jarvis-dev` for testing, `main` and `jarvis-prod` for daily use, prod changes only through an approved merge.

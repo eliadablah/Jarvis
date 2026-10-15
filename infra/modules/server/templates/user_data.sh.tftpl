@@ -1,24 +1,41 @@
 #!/bin/bash
 # First-boot setup for a Jarvis server. Lightsail runs this once, as root.
-# Installs security updates, Docker, and Tailscale, creates the limited
-# "deploy" user GitHub Actions logs in as, then joins my tailnet.
+# Joins my tailnet FIRST, so if anything later fails I can still get in and
+# read the log. Then installs security updates, Docker, and the limited
+# "deploy" user GitHub Actions logs in as.
 set -euo pipefail
+
+# Everything this script prints also goes to a log I can read over Tailscale.
+exec > >(tee -a /var/log/jarvis-boot.log) 2>&1
+echo "jarvis boot: started $(date -Is)"
+
 export DEBIAN_FRONTEND=noninteractive
+export NEEDRESTART_MODE=a
 
-# --- Updates and automatic security patches ---
-apt-get update
-apt-get -y upgrade
-apt-get install -y unattended-upgrades docker.io docker-compose-v2
-systemctl enable --now docker
+# A fresh Ubuntu server runs its own updates on first boot and holds the
+# package lock. Wait for it (up to 10 min) instead of failing immediately.
+# Applies to every apt-get call, including the one inside Tailscale's installer.
+echo 'DPkg::Lock::Timeout "600";' > /etc/apt/apt.conf.d/99-jarvis-lock-timeout
 
-# --- Deploy user (no password, no sudo; can only run containers) ---
-id deploy >/dev/null 2>&1 || useradd --create-home --shell /bin/bash deploy
-usermod -aG docker deploy
-
-# --- Join the tailnet with Tailscale SSH, so port 22 never needs to be open ---
+# --- 1. Join the tailnet with Tailscale SSH (port 22 never needs to be open) ---
 curl -fsSL https://tailscale.com/install.sh | sh
 tailscale up \
   --auth-key="${tailscale_auth_key}" \
   --hostname="${hostname}" \
   --advertise-tags="${tailscale_tags}" \
   --ssh
+echo "jarvis boot: joined tailnet $(date -Is)"
+
+# --- 2. Updates and automatic security patches ---
+# Keep existing config files on upgrade instead of stopping to ask.
+apt-get update
+apt-get -y -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold upgrade
+apt-get -y -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold \
+  install unattended-upgrades docker.io docker-compose-v2
+systemctl enable --now docker
+
+# --- 3. Deploy user (no password, no sudo; can only run containers) ---
+id deploy >/dev/null 2>&1 || useradd --create-home --shell /bin/bash deploy
+usermod -aG docker deploy
+
+echo "jarvis boot: finished $(date -Is)"
