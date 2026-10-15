@@ -2,6 +2,14 @@
 
 ## 2026-10-15
 
+### App - Jarvis reads my vault
+
+- My Obsidian vault is now the private repo `eliadablah/jarvis-vault` (scanned for secrets first; workspace layout files ignored).
+- New `vault-sync` container (alpine/git v2.52.0) clones the vault and refreshes it every 5 minutes into a shared volume. It uses a read-only deploy key that works only on that repo, with GitHub's published host keys pinned in `deploy/github_known_hosts`.
+- Jarvis runs inside the vault with three read-only tools: Read, Glob, Grep. Denied on top of `dontAsk`: MCP tools, `/proc`, and Claude Code's own config. The vault is mounted read-only in the app container as a second lock.
+- Persona now tells Jarvis to check the vault (`VAULT-INDEX.md`, `Active Priorities.md`, daily notes) before answering questions about me, to cite notes, and that it can't write yet.
+- GitHub secret `VAULT_DEPLOY_KEY` holds the private key; the deploy writes it to a deploy-user-only file on the server. The local copy was deleted after upload.
+
 ### Test - Chat on dev
 
 - Deploy `040101b` succeeded. On `https://dev-jarvis.eliadablah.com`, Jarvis answered in persona and a follow-up question correctly recalled the previous one (same session).

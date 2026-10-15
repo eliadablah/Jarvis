@@ -55,10 +55,14 @@ test("splitLines keeps the unfinished line", () => {
   assert.deepEqual(splitLines('{"a":1}\n{"b":'), { lines: ['{"a":1}'], rest: '{"b":' });
 });
 
-test("args turn off every tool and never include the message", () => {
+test("args allow only read-only tools and deny the rest", () => {
   const args = buildClaudeArgs(claude, undefined);
-  assert.equal(args[args.indexOf("--tools") + 1], "");
-  assert.equal(args[args.indexOf("--disallowedTools") + 1], "mcp__*");
+  assert.equal(args[args.indexOf("--tools") + 1], "Read,Glob,Grep");
+  for (const banned of ["Bash", "Edit", "Write", "WebFetch", "WebSearch"]) {
+    assert.ok(!args[args.indexOf("--tools") + 1]?.includes(banned), `${banned} must not be allowed`);
+  }
+  const denied = args.slice(args.indexOf("--disallowedTools") + 1, args.indexOf("--permission-mode"));
+  assert.deepEqual(denied, ["mcp__*", "Read(//proc/**)", "Read(//home/node/.claude/**)"]);
   assert.equal(args[args.indexOf("--permission-mode") + 1], "dontAsk");
   assert.ok(!args.includes("--resume"));
 });

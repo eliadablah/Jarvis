@@ -4,3 +4,5 @@
 *.tftpl  text eol=lf
 *.yml    text eol=lf
 *.yaml   text eol=lf
+deploy/Caddyfile            text eol=lf
+deploy/github_known_hosts   text eol=lf

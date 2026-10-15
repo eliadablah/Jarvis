@@ -14,6 +14,8 @@ services:
     restart: unless-stopped
     environment:
       APP_ENV: ${APP_ENV:?APP_ENV is required}
+      # Jarvis works inside my vault (read-only).
+      JARVIS_WORKDIR: /home/node/vault
     # CLAUDE_CODE_OAUTH_TOKEN lives only in this file on the server.
     env_file: .env
     expose:
@@ -24,10 +26,38 @@ services:
     volumes:
       # Claude Code's conversation history, kept across restarts.
       - claude_home:/home/node
+      # My vault, kept fresh by vault-sync. Jarvis can read it, never change it.
+      - vault:/home/node/vault:ro
     security_opt:
       - no-new-privileges:true
     cap_drop:
       - ALL
+
+  # Pulls my private vault repo every 5 minutes into the shared vault volume.
+  vault-sync:
+    image: alpine/git:v2.52.0
+    container_name: jarvis-vault-sync
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "/run/vault/vault-sync.sh"]
+    environment:
+      HOME: /tmp
+      SYNC_INTERVAL: "300"
+    read_only: true
+    tmpfs:
+      - /tmp
+    volumes:
+      - vault:/vault
+      - ./vault-sync.sh:/run/vault/vault-sync.sh:ro
+      - ./vault_key:/run/vault/key:ro
+      - ./github_known_hosts:/run/vault/known_hosts:ro
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    # The key file belongs to the deploy user with mode 600; this one
+    # capability lets the container's root read it.
+    cap_add:
+      - DAC_OVERRIDE
 
   # HTTPS in front of the app.
   proxy:
@@ -51,5 +81,6 @@ services:
 
 volumes:
   claude_home:
+  vault:
   caddy_data:
   caddy_config:

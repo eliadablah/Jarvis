@@ -9,7 +9,8 @@
 # Needs GHCR_USER and GHCR_TOKEN in the environment: a short-lived token the
 # server uses once to pull the image, then logs out again.
 # Needs CLAUDE_CODE_OAUTH_TOKEN: the one-year Claude Code login, written to
-# a root-only .env on the server (never into the image or the repo).
+# a deploy-user-only .env on the server (never into the image or the repo).
+# Needs VAULT_DEPLOY_KEY: the read-only key for the private vault repo.
 set -euo pipefail
 
 host="$1"
@@ -19,6 +20,7 @@ domain="$4"
 : "${GHCR_USER:?GHCR_USER is required}"
 : "${GHCR_TOKEN:?GHCR_TOKEN is required}"
 : "${CLAUDE_CODE_OAUTH_TOKEN:?CLAUDE_CODE_OAUTH_TOKEN is required}"
+: "${VAULT_DEPLOY_KEY:?VAULT_DEPLOY_KEY is required}"
 
 # Resolve the server's Tailscale address (CI may not use MagicDNS names).
 ip="$(tailscale ip -4 "$host")"
@@ -37,6 +39,11 @@ ssh "${ssh_opts[@]}" "$target" 'umask 077 && cat > ~/jarvis/certs/key.pem' < cer
 # The token travels over stdin and lands in a file only the deploy user can read.
 printf 'CLAUDE_CODE_OAUTH_TOKEN=%s\n' "$CLAUDE_CODE_OAUTH_TOKEN" \
   | ssh "${ssh_opts[@]}" "$target" 'umask 077 && cat > ~/jarvis/.env'
+# Vault sync: the read-only key, GitHub's pinned host keys, and the script.
+printf '%s\n' "$VAULT_DEPLOY_KEY" \
+  | ssh "${ssh_opts[@]}" "$target" 'umask 077 && cat > ~/jarvis/vault_key'
+ssh "${ssh_opts[@]}" "$target" 'cat > ~/jarvis/github_known_hosts' < deploy/github_known_hosts
+ssh "${ssh_opts[@]}" "$target" 'cat > ~/jarvis/vault-sync.sh' < deploy/vault-sync.sh
 
 # --- 2. Pull the new image (log in only for the pull) and restart ---
 # The values below are filled in here on the runner on purpose, then sent

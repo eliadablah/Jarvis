@@ -110,6 +110,7 @@ jobs:
           GHCR_USER: ${{ github.actor }}
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          VAULT_DEPLOY_KEY: ${{ secrets.VAULT_DEPLOY_KEY }}
         run: bash deploy/deploy.sh "$HOST" "$APP_ENV" "${{ needs.build.outputs.tag }}" "$DOMAIN"
 
   deploy-prod:
@@ -155,4 +156,5 @@ jobs:
           GHCR_USER: ${{ github.actor }}
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          VAULT_DEPLOY_KEY: ${{ secrets.VAULT_DEPLOY_KEY }}
         run: bash deploy/deploy.sh "$HOST" "$APP_ENV" "${{ needs.build.outputs.tag }}" "$DOMAIN"
