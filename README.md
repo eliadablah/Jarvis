@@ -51,10 +51,10 @@ Nothing reaches prod without passing through dev first. Details in [docs/environ
 - [x] Web app in a Docker container (TypeScript, tested, runs as a non-root user)
 - [x] GitHub Actions: checks on every push, automatic deploys to dev
 - [x] HTTPS on my own domain: `https://dev-jarvis.eliadablah.com`, reachable only on my private network, certificate issued by CI with no AWS credentials on the server
-- [ ] Text chat with Jarvis on the site, powered by Claude Code (built, first dev deploy pending)
+- [x] Text chat with Jarvis on the site, powered by Claude Code (talk only, no tools yet)
+- [ ] Jarvis reads my Obsidian vault (private repo sync)
+- [ ] Voice: mic button and spoken answers in the browser
 - [ ] Approval-gated deploys to prod at `https://jarvis.eliadablah.com` (pipeline ready, waiting on `jarvis-prod`)
-- [ ] Vault sync through a private repo
-- [ ] Phone dashboard with browser voice
 
 ## Repo layout
 

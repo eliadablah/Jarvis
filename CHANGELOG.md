@@ -2,6 +2,11 @@
 
 ## 2026-10-15
 
+### Test - Chat on dev
+
+- Deploy `040101b` succeeded. On `https://dev-jarvis.eliadablah.com`, Jarvis answered in persona and a follow-up question correctly recalled the previous one (same session).
+- Refused as designed: a request without the chat header (403), a request from another website's origin (403), and a session ID that looks like a flag (400).
+
 ### App - Text chat with Jarvis
 
 - The home page is now a chat: type a message, Jarvis's answer streams in word by word, and follow-up questions continue the same conversation (session ID kept in the browser).
