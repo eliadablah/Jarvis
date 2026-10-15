@@ -49,7 +49,8 @@ Nothing reaches prod without passing through dev first. Details in [docs/environ
 - [x] Build and test `jarvis-dev`: joins Tailscale on first boot, SSH only through Tailscale, Docker ready
 - [ ] Build `jarvis-prod` from the same tested blueprint
 - [x] Web app in a Docker container (TypeScript, tested, runs as a non-root user)
-- [ ] GitHub Actions: checks on every push, automatic dev deploys, approval-gated prod deploys (written, first run pending)
+- [x] GitHub Actions: checks on every push, automatic deploys to dev (live at `http://jarvis-dev` on my tailnet)
+- [ ] Approval-gated deploys to prod (pipeline ready, waiting on `jarvis-prod`)
 - [ ] `jarvis.eliadablah.com` pointing at prod, reachable only on my private network
 - [ ] Vault sync through a private repo
 - [ ] Phone dashboard with browser voice

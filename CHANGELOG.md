@@ -2,6 +2,11 @@
 
 ## 2026-10-15
 
+### CI/CD - First deploy to dev
+
+- First push with the pipeline deployed `9ac0466` to `jarvis-dev`: health check returned `{"status":"ok","env":"dev","version":"9ac0466"}`, and `http://jarvis-dev` shows the Jarvis page as Dev on my tailnet.
+- CI failed only on ShellCheck findings in `deploy/deploy.sh`. Fixed: the remote compose step now uses a quoted heredoc with values passed as environment variables, the intentional runner-side expansions are marked with a reason, and the unused loop variable is gone.
+
 ### CI/CD - GitHub Actions pipeline
 
 - `ci.yml`: on every push and pull request to `dev`/`main`, type-check, test, and build the app; `terraform fmt` and `validate` every stack without touching real state; lint the deploy script.

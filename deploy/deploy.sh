@@ -27,13 +27,16 @@ ssh "${ssh_opts[@]}" "$target" "mkdir -p ~/jarvis"
 ssh "${ssh_opts[@]}" "$target" "cat > ~/jarvis/compose.yaml" < deploy/compose.yaml
 
 # --- 2. Pull the new image (log in only for the pull) and restart ---
+# The values below are filled in here on the runner on purpose, then sent
+# to the server; the token itself travels over stdin, never on a command line.
+# shellcheck disable=SC2029
 printf '%s' "$GHCR_TOKEN" | ssh "${ssh_opts[@]}" "$target" \
   "docker login ghcr.io -u '$GHCR_USER' --password-stdin >/dev/null"
 
-ssh "${ssh_opts[@]}" "$target" bash -s <<EOF
+# shellcheck disable=SC2029
+ssh "${ssh_opts[@]}" "$target" "IMAGE_TAG='$image_tag' APP_ENV='$app_env' bash -s" <<'EOF'
 set -euo pipefail
 cd ~/jarvis
-export IMAGE_TAG='$image_tag' APP_ENV='$app_env'
 trap 'docker logout ghcr.io >/dev/null 2>&1 || true' EXIT
 docker compose pull
 docker compose up -d --remove-orphans
@@ -41,7 +44,7 @@ docker image prune -f >/dev/null
 EOF
 
 # --- 3. Health check from the server itself (CI can only reach port 22) ---
-for attempt in $(seq 1 15); do
+for _ in $(seq 1 15); do
   if body="$(ssh "${ssh_opts[@]}" "$target" "curl -fsS http://127.0.0.1/healthz")"; then
     echo "Health check passed: $body"
     if [[ "$body" == *"\"version\":\"$image_tag\""* ]]; then
