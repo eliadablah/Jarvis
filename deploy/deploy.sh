@@ -4,7 +4,7 @@
 # and dns-and-cert.sh has left the certificate in ./certs/.
 #
 # Usage: deploy.sh <tailscale-hostname> <app-env> <image-tag> <domain>
-#   e.g. deploy.sh jarvis-dev dev 3f2a1b9 dev.jarvis.eliadablah.com
+#   e.g. deploy.sh jarvis-dev dev 3f2a1b9 dev-jarvis.eliadablah.com
 #
 # Needs GHCR_USER and GHCR_TOKEN in the environment: a short-lived token the
 # server uses once to pull the image, then logs out again.

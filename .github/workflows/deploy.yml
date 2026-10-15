@@ -74,7 +74,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: dev
-      url: https://dev.jarvis.eliadablah.com
+      url: https://dev-jarvis.eliadablah.com
     permissions:
       contents: read
       packages: read
@@ -82,7 +82,7 @@ jobs:
     env:
       HOST: jarvis-dev
       APP_ENV: dev
-      DOMAIN: dev.jarvis.eliadablah.com
+      DOMAIN: dev-jarvis.eliadablah.com
     steps:
       - uses: actions/checkout@v4
 

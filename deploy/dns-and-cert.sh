@@ -4,7 +4,7 @@
 # it has joined the tailnet and assumed the jarvis-github-dns AWS role.
 #
 # Usage: dns-and-cert.sh <tailscale-hostname> <domain>
-#   e.g. dns-and-cert.sh jarvis-dev dev.jarvis.eliadablah.com
+#   e.g. dns-and-cert.sh jarvis-dev dev-jarvis.eliadablah.com
 #
 # Needs CERT_BUCKET and ROUTE53_ZONE_ID, plus the AWS credentials that
 # aws-actions/configure-aws-credentials puts in the environment.

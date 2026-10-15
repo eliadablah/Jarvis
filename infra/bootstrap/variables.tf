@@ -7,10 +7,15 @@ variable "aws_region" {
   default     = "us-east-2"
 }
 
-variable "github_repo" {
-  description = "GitHub repo allowed to deploy, as owner/name (case must match GitHub)."
+variable "github_oidc_subject_prefix" {
+  description = <<-EOT
+    Start of the identity ("sub" claim) GitHub Actions sends for my repo.
+    The repo uses GitHub's immutable subject format, which includes the
+    owner and repo IDs so a renamed or re-created repo can't impersonate it.
+    Check with: gh api repos/eliadablah/Jarvis/actions/oidc/customization/sub
+  EOT
   type        = string
-  default     = "eliadablah/Jarvis"
+  default     = "repo:eliadablah@232940632/Jarvis@1421100534"
 }
 
 variable "dns_zone_name" {
@@ -22,7 +27,7 @@ variable "dns_zone_name" {
 variable "jarvis_hostnames" {
   description = "The only DNS names the CI robot may change (plus their _acme-challenge records)."
   type        = list(string)
-  default     = ["dev.jarvis.eliadablah.com", "jarvis.eliadablah.com"]
+  default     = ["dev-jarvis.eliadablah.com", "jarvis.eliadablah.com"]
 }
 
 variable "deploy_environments" {

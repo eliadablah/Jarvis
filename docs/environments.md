@@ -14,7 +14,7 @@ Both servers are built from the same Terraform blueprint (`infra/modules/server`
 | Lifetime | Built to test, destroyed after | Always on |
 | Snapshots | Off | Daily, last 7 kept |
 | Tailscale tag | `tag:dev` | `tag:prod` |
-| Address (planned) | `dev.jarvis.eliadablah.com` on my tailnet | `jarvis.eliadablah.com` on my tailnet |
+| Address | `https://dev-jarvis.eliadablah.com` on my tailnet | `https://jarvis.eliadablah.com` on my tailnet |
 | Who can change it | Any push to `dev` (once CI/CD exists) | Only a merge to `main`, after I approve it in GitHub |
 
 For quick app work I can also run the containers on my own PC with Docker Compose before anything touches a server.
@@ -43,9 +43,13 @@ This keeps the rule from my AWS plan: **nothing listening on the public internet
 
 If I later need Jarvis from a computer that isn't mine, I'll add Cloudflare Access in front instead of opening the server up.
 
-## DNS records (planned)
+## DNS records
+
+Managed by the deploy pipeline in Route 53 (TTL 60 seconds), refreshed on every deploy because a rebuilt server gets a new Tailscale address.
 
 | Name | Type | Points to |
 |---|---|---|
 | `jarvis` | A | `jarvis-prod`'s Tailscale IP |
-| `dev.jarvis` | A | `jarvis-dev`'s Tailscale IP (only while dev exists) |
+| `dev-jarvis` | A | `jarvis-dev`'s Tailscale IP (only while dev exists) |
+
+HTTPS certificates come from Let's Encrypt through a DNS challenge run by CI, are stored in a private S3 bucket, and are reused until 30 days before expiry. The servers never hold AWS credentials.

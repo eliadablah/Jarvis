@@ -36,7 +36,7 @@ data "aws_iam_policy_document" "dns_trust" {
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = [for env in var.deploy_environments : "repo:${var.github_repo}:environment:${env}"]
+      values   = [for env in var.deploy_environments : "${var.github_oidc_subject_prefix}:environment:${env}"]
     }
   }
 }

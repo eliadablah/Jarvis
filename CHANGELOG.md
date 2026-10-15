@@ -2,9 +2,15 @@
 
 ## 2026-10-15
 
+### Fix - GitHub identity format and dev domain name
+
+- The first HTTPS deploy failed at "Sign in to AWS": this repo uses GitHub's immutable OIDC subject format (`repo:eliadablah@232940632/Jarvis@1421100534:...`, owner and repo IDs included), but the roles trusted the old `repo:eliadablah/Jarvis:...` format. All three robot roles (plan, apply, dns) now use the immutable prefix, set once in `github_oidc_subject_prefix`.
+- Renamed the dev address from `dev.jarvis.eliadablah.com` to `dev-jarvis.eliadablah.com`.
+- Applied: 0 added, 4 changed, 0 destroyed.
+
 ### Deploy - HTTPS on my own domain
 
-- Each deploy points `dev.jarvis.eliadablah.com` (or `jarvis.eliadablah.com` for prod) at the server's Tailscale address in Route 53. The address changes when dev is rebuilt, so every deploy refreshes it. TTL is 60 seconds.
+- Each deploy points `dev-jarvis.eliadablah.com` (or `jarvis.eliadablah.com` for prod) at the server's Tailscale address in Route 53. The address changes when dev is rebuilt, so every deploy refreshes it. TTL is 60 seconds.
 - `deploy/dns-and-cert.sh`: CI gets a Let's Encrypt certificate with a DNS challenge (lego v4.35.2), stores it in the certificate bucket, and reuses it until it's within 30 days of expiring, so rebuilding dev doesn't hit Let's Encrypt's weekly limits.
 - Caddy 2.11.7 runs in front of the app with that certificate; plain HTTP (including `http://jarvis-dev`) redirects to the HTTPS name. The app is no longer published directly.
 - The deploy health check now goes through HTTPS on the server, proving Caddy, the certificate, and the app work together.
