@@ -1,0 +1,33 @@
+# The open-source kit parts. Each one is its own upstream repo with its own
+# license, so I install them from source (see docs/setup.md) instead of
+# copying them in here.
+/fullstack-agent/
+/ai-memory-vault/
+/ai-visualizer/
+/backtalk/
+/barehands/
+
+# Jarvis's private boot file (identity, rules, local paths)
+/CLAUDE.md
+
+# My real settings have local paths in them. Only the .example versions
+# with placeholders get committed.
+config/*.json
+!config/*.json.example
+
+# Secrets never get committed
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Python and Node leftovers
+.venv/
+__pycache__/
+node_modules/
+
+# OS and editor junk
+.DS_Store
+Thumbs.db
+.vscode/

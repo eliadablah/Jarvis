@@ -1,0 +1,14 @@
+{
+  "agent_dir": "C:/Users/YOUR_USER/my-agent",
+  "name": "Jarvis",
+  "ptt_key": "home",
+  "voice": "bm_lewis",
+  "stt_model": "small.en",
+  "mic_mode": "ptt",
+  "permission_mode": "ask",
+  "extra_dirs": [
+    "C:/Users/YOUR_USER/Jarvis Vault"
+  ],
+  "resume_last_session": true,
+  "barehands_state_dir": "C:/Users/YOUR_USER/my-agent/barehands/state"
+}
