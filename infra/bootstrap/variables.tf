@@ -2,7 +2,7 @@
 # here is secret.
 
 variable "aws_region" {
-  description = "AWS region for the state bucket and all Jarvis resources."
+  description = "AWS region for the Terraform state bucket. Servers pick their own region."
   type        = string
   default     = "us-east-2"
 }

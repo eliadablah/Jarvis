@@ -24,7 +24,8 @@ I'm building Jarvis as a hands-on DevOps project: I put it together, locked it d
 ## Security decisions
 
 - **Ask-first permissions.** I turned off the "do anything without asking" mode. Jarvis has to ask out loud before any real action.
-- **Nothing public.** In prod, the server has zero ports open to the internet, not even SSH. Only devices on my private Tailscale network can reach it.
+- **Nothing public.** In prod, no TCP port is open to the internet: not SSH, not HTTP, not HTTPS. The only open port is Tailscale's encrypted UDP port, which answers only my own devices. Everything else goes through my private Tailscale network.
+- **Least-privilege network rules.** The GitHub deploy robot can only reach the server over SSH, and the server can't reach my PC or phone at all.
 - **No secrets in git.** Real settings and tokens stay on the machine. This repo only has `.example` files with placeholders.
 - **Budget guardrail.** An AWS Budgets alert fires at $15/month.
 
@@ -43,7 +44,10 @@ I'm building Jarvis as a hands-on DevOps project: I put it together, locked it d
 ## Repo layout
 
 ```text
-infra/       Terraform for AWS (bootstrap: state bucket + GitHub deploy roles)
+infra/       Terraform for AWS
+  bootstrap/       state bucket + GitHub deploy roles (one-time)
+  modules/server/  reusable Lightsail server that joins Tailscale on first boot
+  envs/prod/       the jarvis-prod server
 config/      Settings templates with placeholders (copy, rename, fill in)
 docs/        Setup guide and the dev/prod environment plan
 CHANGELOG.md What changed and when

@@ -1,0 +1,24 @@
+#!/bin/bash
+# First-boot setup for a Jarvis server. Lightsail runs this once, as root.
+# Installs security updates, Docker, and Tailscale, creates the limited
+# "deploy" user GitHub Actions logs in as, then joins my tailnet.
+set -euo pipefail
+export DEBIAN_FRONTEND=noninteractive
+
+# --- Updates and automatic security patches ---
+apt-get update
+apt-get -y upgrade
+apt-get install -y unattended-upgrades docker.io docker-compose-v2
+systemctl enable --now docker
+
+# --- Deploy user (no password, no sudo; can only run containers) ---
+id deploy >/dev/null 2>&1 || useradd --create-home --shell /bin/bash deploy
+usermod -aG docker deploy
+
+# --- Join the tailnet with Tailscale SSH, so port 22 never needs to be open ---
+curl -fsSL https://tailscale.com/install.sh | sh
+tailscale up \
+  --auth-key="${tailscale_auth_key}" \
+  --hostname="${hostname}" \
+  --advertise-tags="${tailscale_tags}" \
+  --ssh

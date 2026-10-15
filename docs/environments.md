@@ -4,7 +4,8 @@ I run two copies of Jarvis so I can try changes without breaking the one I rely 
 
 | | Dev | Prod |
 |---|---|---|
-| Where | My Windows PC | AWS Lightsail (Linux, 2 GB RAM) |
+| Where | My Windows PC | AWS Lightsail, N. Virginia (`us-east-1`), Ubuntu 24.04, 2 GB RAM |
+| Built by | Docker Compose | Terraform (`infra/envs/prod`) |
 | Address | `localhost` on the PC, `dev.jarvis.eliadablah.com` on my tailnet | `jarvis.eliadablah.com` on my tailnet |
 | Git branch | `dev` | `main` |
 | Purpose | Try new settings, prompts, and dashboard code | The Jarvis I actually use day to day |
