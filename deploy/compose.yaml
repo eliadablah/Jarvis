@@ -1,0 +1,21 @@
+# How the Jarvis web app runs on a server (jarvis-dev or jarvis-prod).
+# The deploy workflow copies this file to /home/deploy/jarvis/ and sets
+# IMAGE_TAG and APP_ENV, then runs `docker compose pull && docker compose up -d`.
+#
+# Port 80 on the server is only reachable over Tailscale: the Lightsail
+# firewall has no TCP ports open to the internet.
+
+services:
+  web:
+    image: ghcr.io/eliadablah/jarvis-web:${IMAGE_TAG:?IMAGE_TAG is required}
+    container_name: jarvis-web
+    restart: unless-stopped
+    environment:
+      APP_ENV: ${APP_ENV:?APP_ENV is required}
+    ports:
+      - "80:3000"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL

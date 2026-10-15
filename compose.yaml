@@ -1,0 +1,14 @@
+# Run the Jarvis web app on my PC with Docker, the same way the servers do.
+#   docker compose up --build
+# Then open http://localhost:3000
+
+services:
+  web:
+    build:
+      context: ./app
+      args:
+        APP_VERSION: local
+    environment:
+      APP_ENV: local
+    ports:
+      - "3000:3000"
