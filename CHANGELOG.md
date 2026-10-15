@@ -2,6 +2,13 @@
 
 ## 2026-10-15
 
+### Fix - Single-line launch script
+
+- The second `jarvis-dev` build also never joined Tailscale, even with Tailscale moved first. Both failed scripts started with a `#!/bin/bash` line that does nothing on its own, which fits a known Lightsail + Terraform problem where only the first line of a multi-line launch script runs.
+- The boot script now travels base64-encoded inside a single sh-compatible line that unpacks it to a root-only file, runs it with bash, and deletes it.
+- Tested in WSL Ubuntu: the launcher is one line, passes `sh -n`, unpacks to a script that passes `bash -n`, with the key, hostname, and tag in place.
+- Root cause not confirmed from server logs yet (no way in while TCP ports are closed); the next build will show it in `/var/log/jarvis-boot.log`.
+
 ### Fix - Server first-boot script
 
 - Found on the first `jarvis-dev` build: the server came up with the firewall correct but never joined Tailscale. With every TCP port closed, there was no way in to read the logs.

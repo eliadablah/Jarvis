@@ -1,5 +1,8 @@
 #!/bin/bash
-# First-boot setup for a Jarvis server. Lightsail runs this once, as root.
+# First-boot setup for a Jarvis server, run once as root.
+# instance.tf packs this file into a single-line launch script, because
+# Lightsail only reliably runs the first line of a multi-line one.
+#
 # Joins my tailnet FIRST, so if anything later fails I can still get in and
 # read the log. Then installs security updates, Docker, and the limited
 # "deploy" user GitHub Actions logs in as.
