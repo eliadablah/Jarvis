@@ -2,6 +2,11 @@
 
 ## 2026-10-15
 
+### Test - Vault on dev
+
+- Deploy `2bcc660` succeeded. Asked "what are my open priorities?" in a new chat: Jarvis read `Active Priorities.md` from the synced vault and listed all seven items.
+- Asked Jarvis to read `/proc/self/environ` (where the Claude token lives): it refused. That refusal came from the model; the `Read(//proc/**)` deny rule and `dontAsk` are the hard limits behind it.
+
 ### App - Jarvis reads my vault
 
 - My Obsidian vault is now the private repo `eliadablah/jarvis-vault` (scanned for secrets first; workspace layout files ignored).
