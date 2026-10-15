@@ -11,6 +11,6 @@ output "availability_zone" {
 }
 
 output "public_ipv4" {
-  description = "Public IPv4. Every port on it is closed; reach the server through Tailscale."
+  description = "Public IPv4. Every TCP port is closed; reach the server through Tailscale."
   value       = aws_lightsail_instance.server.public_ip_address
 }

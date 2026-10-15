@@ -1,0 +1,4 @@
+# Copy to backend.hcl (gitignored) and fill in the bucket from
+# `terraform output state_bucket` in infra/bootstrap. Then:
+#   terraform init -backend-config=backend.hcl
+bucket = "jarvis-tfstate-YOUR_ACCOUNT_ID"

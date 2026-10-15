@@ -6,6 +6,6 @@ output "server_name" {
 }
 
 output "public_ipv4" {
-  description = "Public IPv4 with every port closed. Use Tailscale to connect."
+  description = "Public IPv4 with every TCP port closed. Use Tailscale to connect."
   value       = module.server.public_ipv4
 }
