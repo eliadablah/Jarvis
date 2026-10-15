@@ -48,8 +48,8 @@ Nothing reaches prod without passing through dev first. Details in [docs/environ
 - [x] Terraform for dev and prod servers
 - [x] Build and test `jarvis-dev`: joins Tailscale on first boot, SSH only through Tailscale, Docker ready
 - [ ] Build `jarvis-prod` from the same tested blueprint
-- [ ] Docker container for the server app
-- [ ] GitHub Actions: checks on every push, automatic dev deploys, approval-gated prod deploys
+- [x] Web app in a Docker container (TypeScript, tested, runs as a non-root user)
+- [ ] GitHub Actions: checks on every push, automatic dev deploys, approval-gated prod deploys (written, first run pending)
 - [ ] `jarvis.eliadablah.com` pointing at prod, reachable only on my private network
 - [ ] Vault sync through a private repo
 - [ ] Phone dashboard with browser voice
@@ -62,6 +62,9 @@ infra/       Terraform for AWS
   modules/server/  reusable Lightsail server that joins Tailscale on first boot
   envs/dev/        jarvis-dev, the temporary test server
   envs/prod/       jarvis-prod, the always-on server
+app/         The Jarvis web app (TypeScript) and its Dockerfile
+deploy/      How the app runs on a server, and the script CI uses to deploy it
+.github/     GitHub Actions: CI checks and the dev/prod deploy pipeline
 config/      Settings templates with placeholders (copy, rename, fill in)
 docs/        Setup guide and the dev/prod environment plan
 CHANGELOG.md What changed and when

@@ -1,0 +1,6 @@
+# Scripts that run on Linux must keep Linux line endings, even when checked
+# out on Windows. A Windows line ending on line 1 breaks the whole script.
+*.sh     text eol=lf
+*.tftpl  text eol=lf
+*.yml    text eol=lf
+*.yaml   text eol=lf
