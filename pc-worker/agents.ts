@@ -40,6 +40,8 @@ export function refusal(text: string): AgentRun["failure"] {
   return;
 }
 export function canFallback(run: AgentRun): boolean { return Boolean(run.failure && run.safeToRetry); }
+/** Reporting and tool discovery cannot perform the requested action. */
+export function mayHaveActed(name: string): boolean { return !["StructuredOutput", "ToolSearch"].includes(name); }
 export function reportedRun(value: unknown, plan: PcPlan, touchedTools: boolean): AgentRun {
   const report = validateReport(value, plan);
   const unavailable = report.outcome === "needs_input" && !touchedTools;
@@ -174,7 +176,7 @@ export async function runAgent(id: string, settings: WorkerSettings, task: Claim
     signal.addEventListener("abort", abort, { once: true });
     function event(line: string) {
       let e; try { e = JSON.parse(line); } catch { return; }
-      const tool = e.type === "assistant" && e.message?.content?.some((c: {type: string}) => c.type === "tool_use") ||
+      const tool = e.type === "assistant" && e.message?.content?.some((c: {type: string; name: string}) => c.type === "tool_use" && mayHaveActed(c.name)) ||
         (e.type === "item.started" || e.type === "item.completed") && !["agent_message", "reasoning", "error"].includes(e.item?.type);
       if (tool) { touchedTools = true; progress(id + " is using its tools."); }
       if (e.type === "result") { candidate = e.structured_output; if (candidate === undefined && typeof e.result === "string") { try { candidate = JSON.parse(e.result); } catch {} } completed = !e.is_error; diagnostics += " " + String(e.result ?? ""); }

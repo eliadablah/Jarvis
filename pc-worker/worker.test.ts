@@ -10,7 +10,7 @@ import { validateReport, emptyReport, type PcPlan, type ExecutorStatus } from ".
 import { enqueuePcTask, claimNextPcTask, heartbeatPcTask, finishPcTask, cancelPcTask, pcSnapshot, readPcTasks, publicTask, workerOnline } from "../app/src/pcTasks/store.ts";
 import { handlePcTasks } from "../app/src/pcTasks/api.ts";
 import { loadConfig } from "../app/src/config.ts";
-import { agentStatuses, chooseAgents, canFallback, reportedRun, refusal, jobPrompt, codexArgs, claudeArgs, promptFor } from "./agents.ts";
+import { agentStatuses, chooseAgents, canFallback, mayHaveActed, reportedRun, refusal, jobPrompt, codexArgs, claudeArgs, promptFor } from "./agents.ts";
 import { readState, saveState, acquireWorkerLock } from "./persistence.ts";
 import { validateClaim, deliverReport } from "./worker.ts";
 import { readWorkerActivity } from "./status.ts";
@@ -206,3 +206,14 @@ test('old workers cannot claim native actions; new capability claims validate',a
  const desktop:ExecutorStatus[]=[{id:'claude-computer',capabilities:['computer'],state:'ready',reason:'',remainingTokens:null}];
  const claimed=(await claimNextPcTask(dir,'new',desktop))!;assert.equal(claimed.id,task.id);assert.equal(validateClaim(claimed,'new').id,task.id);
 }));
+
+test("report-only Claude refusal falls back while real browser actions block retry", () => {
+ const scope=plan("Apply to 1 support jobs");
+ const refused=emptyReport("needs_input","Provider unavailable before actions");
+ for(const names of [["StructuredOutput"],["ToolSearch","StructuredOutput"]]) {
+  assert.equal(canFallback(reportedRun(refused,scope,names.some(mayHaveActed))),true);
+ }
+ for(const names of [["mcp__claude-in-chrome__computer","StructuredOutput"],["Bash"],["Write"],["UnrecognizedTool"]]) {
+  assert.equal(canFallback(reportedRun(refused,scope,names.some(mayHaveActed))),false);
+ }
+});

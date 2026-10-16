@@ -2,6 +2,12 @@
 
 ## 2026-10-16
 
+### Fix - Fall back after report-only provider refusal
+
+- StructuredOutput and ToolSearch no longer count as possibly completed PC actions. A provider that only discovers tools or reports unavailability can hand off to Codex; real and unrecognized tool calls still prevent automatic retry.
+- Added regression coverage for the observed report-only refusal and the duplicate-action guard.
+
+
 ### Fix - Restart checks and desktop tool exposure
 
 - Restart status uses bounded Node HTTPS and validates active-task data before stopping anything. Normal certificate and task recovery protections remain enforced.
