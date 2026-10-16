@@ -4,7 +4,9 @@
 //
 // Messages in:  {type: "load"} | {type: "speak", id, text}
 // Messages out: {type: "progress", percent} | {type: "ready"} |
-//               {type: "audio", id, samples, rate} | {type: "error", id?, message}
+//               {type: "audio", id, samples, rate, ms} | {type: "error", id?, message}
+// ms is how long generating that sentence took, so the page can tell
+// whether this device keeps up in real time.
 
 import type * as Kokoro from "kokoro-js";
 
@@ -61,9 +63,11 @@ self.onmessage = (event: MessageEvent<{ type: "load" } | { type: "speak"; id: nu
   queue = queue.then(async () => {
     try {
       const model = await load();
+      const started = performance.now();
       const audio = await model.generate(msg.text, { voice: VOICE });
       const samples = audio.audio;
-      postMessage({ type: "audio", id: msg.id, samples, rate: audio.sampling_rate }, [samples.buffer]);
+      const ms = performance.now() - started;
+      postMessage({ type: "audio", id: msg.id, samples, rate: audio.sampling_rate, ms }, [samples.buffer]);
     } catch (err) {
       postMessage({ type: "error", id: msg.id, message: String(err) });
     }

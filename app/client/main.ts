@@ -215,7 +215,7 @@ voiceToggle.addEventListener("click", () => {
   save("jarvis.voice", voice.enabled ? "on" : "off");
   if (voice.enabled) {
     voice.unlock();
-    voice.load();
+    voice.retryKokoro();
   } else {
     voice.stop();
   }

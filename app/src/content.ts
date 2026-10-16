@@ -26,7 +26,7 @@ export const content = {
   showChatLabel: "Show chat",
   voiceLoading: "Loading Jarvis's voice",
   voiceReady: "Voice ready",
-  voiceFailed: "Voice unavailable, replies will be text only",
+  voiceFailed: "Using the browser's voice",
   listening: "Listening…",
   thinking: "Thinking…",
   emptyState: "All systems online, sir. What are we working on today?",

@@ -2,6 +2,12 @@
 
 ## 2026-10-15
 
+### Fix - Voice never stalls on slow devices
+
+- On dev, Kokoro took ~33 seconds to make 2.6 seconds of speech in the test browser, so Jarvis sat on "thinking" for minutes on long answers.
+- Each sentence now goes to Kokoro only once it's loaded and as long as this device generates speech at least as fast as it plays (up to 1.2× real time). A sentence that isn't back in 6 seconds, or a device that's too slow, switches to the browser's own British voice, which speaks instantly while a speech-shaped waveform keeps the face moving.
+- The worker reports how long each sentence took. The "too slow" verdict is remembered per device; switching the voice off and on in the menu gives Kokoro another try.
+
 ### App - Face and voice, like my local Jarvis
 
 - The page is now the local Jarvis experience: the ai-visualizer circuit board fills the screen, with the chat, a hold-to-talk mic, and a menu floating on top. The menu switches between all four faces (Circuit Board, Radial, Face in the Code, Neural Core), turns the voice on or off, and starts a new chat.
