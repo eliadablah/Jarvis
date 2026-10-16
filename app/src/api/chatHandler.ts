@@ -10,10 +10,12 @@ import { ChatRequestError, checkRequestSource, parseChatRequest, readBody } from
 import { dashboardDir, readDashboard, type DashboardTask } from "../dashboard.ts";
 import { pcTaskContext } from "../pcTasks/api.ts";
 import { handOffPcErrand } from "../pcTasks/handoff.ts";
-import { parsePcIntent } from "../pcTasks/intent.ts";
-import { readPcTasks } from "../pcTasks/store.ts";
+import { resolvePcCommand, replyLink } from "../pcTasks/commands.ts";
+import { readPcTasks, workerOnline } from "../pcTasks/store.ts";
 
 let busy = false;
+// Private, bounded follow-up context: "open it" refers only to one recent link.
+const recentLinks = new Map<string, { link?: string; at: number }>();
 
 /** Encode task titles as data, with a hard bound before they reach a model. */
 export function buildDashboardContext(tasks: DashboardTask[]): string {
@@ -45,7 +47,10 @@ export async function handleChat(req: IncomingMessage, res: ServerResponse, conf
     throw err;
   }
 
-  const pcIntent = parsePcIntent(chat.message);
+  const ids = [chat.sessionId, ...Object.values(chat.sessions ?? {})].filter((id): id is string => Boolean(id));
+  const previous = ids.map(id => recentLinks.get(id)).filter(v => v && Date.now() - v.at < 30 * 60_000).sort((a,b) => b!.at - a!.at)[0];
+  const pcCommand = resolvePcCommand(chat.message, previous?.link);
+  const pcIntent = pcCommand?.intent;
   if (!pcIntent && chat.provider === "codex" && !config.codex?.enabled) return sendError(res, 503, "Codex is not connected yet. Select Claude.");
   if (busy) return sendError(res, 429, "Jarvis is still answering. Try again in a moment.");
   busy = true;
@@ -58,8 +63,9 @@ export async function handleChat(req: IncomingMessage, res: ServerResponse, conf
   }
   // Reports from the PC worker, so "how did the job applying go?" has an answer.
   try {
-    const pcTasks = (await readPcTasks(dashboardDir(config))).tasks;
-    if (pcTasks.length) chat.serverContext += `\n${pcTaskContext(pcTasks)}`;
+    const state = await readPcTasks(dashboardDir(config));
+    chat.serverContext += "\n" + JSON.stringify({ source: "Current Jarvis PC capabilities", enabled: Boolean(config.pcWorkerToken), online: workerOnline(state), executors: state.executors ?? [], browserScope: "read and navigate", desktopApps: ["calculator", "notepad", "explorer"] });
+    if (state.tasks.length) chat.serverContext += "\n" + pcTaskContext(state.tasks);
   } catch { /* no reports yet */ }
 
   // Stop Claude Code if the browser goes away mid-answer.
@@ -76,11 +82,18 @@ export async function handleChat(req: IncomingMessage, res: ServerResponse, conf
 
   // Job hunting is an errand for my PC (pc-worker/), not a chat answer.
   const events = pcIntent
-    ? handOffPcErrand(dashboardDir(config), chat.message, config.pcWorkerToken ? pcIntent : { type: "clarify", message: "The PC worker is not enabled on this server." }, chat.requestId)
+    ? handOffPcErrand(dashboardDir(config), pcCommand!.request, config.pcWorkerToken ? pcIntent : { type: "clarify", message: "The PC worker is not enabled on this server." }, chat.requestId)
     : getChatRouter(config).answer(chat, abort.signal);
 
+  let reply = "";
   try {
     for await (const event of events) {
+      if (!pcIntent && event.type === "text") reply = (reply + event.text).slice(-24000);
+      if (!pcIntent && event.type === "done" && event.sessionId) {
+        const link = replyLink(reply);
+        recentLinks.set(event.sessionId, { link, at: Date.now() });
+        while (recentLinks.size > 100) recentLinks.delete(recentLinks.keys().next().value!);
+      }
       send(event);
     }
   } catch (err) {

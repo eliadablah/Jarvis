@@ -11,6 +11,8 @@ Jarvis sends explicit PC requests to an authenticated Windows worker. The PC mus
 | Apply to three support jobs | Up to three submissions, within the local configured cap |
 | Submit my prepared job applications for Acme | Only the named applications |
 | Update my job tracker | Local tracker changes |
+| Open my job tracker / open https://example.com | Read and navigate through the Chrome worker |
+| Open it | Open the one recent reply link; ask for a target if ambiguous |
 | In my Chrome, find the AWS documentation | Read and navigate in Chrome |
 | In my assistant workspace, create a budget template | Files in that approved workspace |
 | In my jarvis project, review the task router | The configured Jarvis project |
@@ -19,6 +21,8 @@ Jarvis sends explicit PC requests to an authenticated Windows worker. The PC mus
 | Cancel my PC task | Cancel the single active/queued task; use its button when several exist |
 
 Vague requests to submit drafts ask which drafts. Discussion, status questions and negations do not execute. Unsupported Windows GUI operations need an additional adapter; the worker does not pretend it can click arbitrary apps.
+
+Natural browser requests are normalized on the server to the existing protocol-2 command grammar. Already-running workers validate the same plan without a restart. The selected chat engine does not control dispatch or grant extra permissions. Unsupported actions explain the missing capability; they never claim a queue or successful action. A single reply-link reference lasts at most thirty minutes in bounded private server memory and is lost on a server restart.
 
 ## Agent choice
 

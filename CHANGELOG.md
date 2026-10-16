@@ -2,6 +2,12 @@
 
 ## 2026-10-16
 
+### Fix - Natural PC actions and readable replies
+
+- Ordinary requests such as "open my job tracker", "open this link" and "on my PC open ..." route to the authenticated PC worker before any chat model. The running protocol-2 worker needs no restart. Agent choice follows capability and observed availability.
+- "Open it" uses one recent unambiguous reply link; missing or multiple destinations ask for a target. Removed guessed browser popups and refreshed capability guidance on every model turn, including resumed conversations.
+- Long replies wrap and scroll inside the companion panel in A/B/C and mobile. The orb becomes compact while reading, and the model-tip card stays out of the reply area.
+
 ### Feature - Scoped PC tasks, protocol 2
 
 - Standalone Codex runtime and trusted CA bundle avoid desktop-runtime and certificate conflicts. Permission refusals before any tool use can fall back to the next capable agent. Worker updates include an idle-only restart helper; managed permission profiles remain enforced.

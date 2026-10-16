@@ -67,9 +67,9 @@ window.addEventListener('storage',e=>{const explicit=new URLSearchParams(locatio
 function toast(text){const el=$('#toast');el.textContent=text;el.classList.add('visible');clearTimeout(toast.timer);toast.timer=setTimeout(()=>el.classList.remove('visible'),4000);}
 function stopBriefing(){briefTimers.forEach(clearTimeout);briefTimers=[];$('.shell').classList.remove('briefing');$('#jarvis-state').textContent='Standing by';window.speechSynthesis?.cancel();hideCaption();}
 function navigate(view){stopBriefing();activeView=view;document.querySelectorAll('[data-view]').forEach(n=>n.classList.toggle('active',n.dataset.view===view));$('#view-label').textContent=({dashboard:'Overview',tasks:'My tasks',schedule:'Schedule',jobs:'Job search',money:'Money',vault:'Memory',pc:'PC activity'})[view];document.querySelectorAll('[data-section]').forEach(c=>c.classList.toggle('view-hidden',view==='dashboard'?c.dataset.section==='vault':c.dataset.section!==view));$('.dashboard-grid').classList.toggle('single-view',view!=='dashboard');window.scrollTo({top:0,behavior:'smooth'});}
-// With voice on, replies show as a centered word-by-word caption instead of the reply panel.
+// Replies remain readable in their scroll panel; voice adds a temporary animated caption.
 function speak(text){if(voice)speakWithCaption(text,VOICE_RATE);}
-function say(text){clearTimeout(say.closeTimer);stopBriefing();if(!voice)openReply();$('#transcript').replaceChildren();const p=document.createElement('p');p.className='brief-line';p.textContent=text;$('#transcript').append(p);speak(text);}
+function say(text){clearTimeout(say.closeTimer);stopBriefing();openReply();$('#transcript').replaceChildren();const p=document.createElement('p');p.className='brief-line';p.textContent=text;$('#transcript').append(p);speak(text);}
 // Short confirmations (view switched, task saved) close the reply panel on their own so it doesn't cover the dashboard; real answers stay until closed.
 function confirmAction(text){say(text);say.closeTimer=setTimeout(()=>document.body.classList.remove('reply-open'),6000);}
 function renderTasks(){const done=tasks.filter(t=>t.done).length;$('#task-list').innerHTML=tasks.length?tasks.map(t=>`<div class="task-row ${t.done?'task-done':''}" data-task="${safe(t.id)}"><button class="task-check ${t.done?'checked':''}" data-check="${safe(t.id)}" aria-label="${t.done?'Reopen':'Complete'} ${safe(t.title)}" aria-pressed="${!!t.done}">${t.done?icon('check'):''}</button><div class="task-copy"><div class="task-title">${safe(t.title)}</div><div class="task-meta">${safe(t.tag||'Personal')} · Saved to Jarvis</div></div></div>`).join(''):'<p class="task-meta">Start with one clear next move. Say “add task study Network+”.</p>';$('#task-count').innerHTML=`${tasks.length-done} <span>next moves</span>`;$('#nav-count').textContent=tasks.length-done;$('#complete-count').textContent=`${done} / ${tasks.length}`;$('#progress-fill').style.width=`${tasks.length?done/tasks.length*100:0}%`;document.querySelectorAll('[data-check]').forEach(b=>b.onclick=async()=>{const t=tasks.find(t=>t.id===b.dataset.check);try{const result=await api(`/api/dashboard/tasks/${t.id}`,'PATCH',{done:!t.done});tasks=result.tasks;renderTasks();toast('Task saved.');}catch(e){toast(e.message);}});}
@@ -82,15 +82,14 @@ function updateConnections(data){
 }
 async function refreshRouting(){try{updateConnections(await api('/api/dashboard'));}catch{}}
 async function load(){try{const data=await api('/api/dashboard');tasks=data.tasks;updateConnections(data);renderTasks();$('.preview-tag').textContent=`${data.env.toUpperCase()} · ${data.version.slice(0,7)}`;$('.companion-foot').textContent='Private assistant · tasks saved on server';$('#companion-sub').textContent='Your workspace is ready.';}catch(e){say(e.message);}}
-function brief(){navigate('dashboard');if(!voice)openReply();const pending=tasks.filter(t=>!t.done);const lines=[`Here’s your dashboard. ${pending.length} ${pending.length===1?'task':'tasks'} waiting for you.`,...pending.slice(0,3).map((t,i)=>`${i===0?'First':'Then'}, ${t.title}.`),'Ask me about your inbox or calendar, or tell me to apply to jobs.'];$('#transcript').replaceChildren();$('.shell').classList.add('briefing');$('#jarvis-state').textContent='Briefing';lines.forEach((text,i)=>briefTimers.push(setTimeout(()=>{const p=document.createElement('p');p.className='brief-line';p.textContent=text;$('#transcript').append(p);},i*1400)));briefTimers.push(setTimeout(()=>{$('.shell').classList.remove('briefing');$('#jarvis-state').textContent='Standing by';},lines.length*1400));speak(lines.join(' '));}
+function brief(){navigate('dashboard');openReply();const pending=tasks.filter(t=>!t.done);const lines=[`Here’s your dashboard. ${pending.length} ${pending.length===1?'task':'tasks'} waiting for you.`,...pending.slice(0,3).map((t,i)=>`${i===0?'First':'Then'}, ${t.title}.`),'Ask me about your inbox or calendar, or tell me to apply to jobs.'];$('#transcript').replaceChildren();$('.shell').classList.add('briefing');$('#jarvis-state').textContent='Briefing';lines.forEach((text,i)=>briefTimers.push(setTimeout(()=>{const p=document.createElement('p');p.className='brief-line';p.textContent=text;$('#transcript').append(p);},i*1400)));briefTimers.push(setTimeout(()=>{$('.shell').classList.remove('briefing');$('#jarvis-state').textContent='Standing by';},lines.length*1400));speak(lines.join(' '));}
 function modal(title,body){$('#modal-root').innerHTML=`<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true" aria-label="${safe(title)}"><div class="card-head"><h2>${safe(title)}</h2><button class="text-btn" id="close-modal" aria-label="Close dialog">${icon('close')}</button></div>${body}</section></div>`;$('#close-modal').onclick=()=>$('#modal-root').replaceChildren();$('#close-modal').focus();}
 async function addTask(title){const value=await api('/api/dashboard/tasks','POST',{title});tasks=value.tasks;renderTasks();confirmAction(`Added to your tasks: ${title}.`);}
 $('#add-task').onclick=()=>{modal('Your next move','<label for="new-task">Task</label><input class="modal-input" id="new-task" maxlength="300" placeholder="A small, clear next move"><button class="primary-btn" id="save-task">Save task</button>');$('#new-task').focus();$('#save-task').onclick=async()=>{const title=$('#new-task').value.trim();if(!title)return;const button=$('#save-task');if(button.disabled)return;button.disabled=true;try{await addTask(title);$('#modal-root').replaceChildren();}catch(e){toast(e.message);}finally{button.disabled=false;}};};
 async function chat(message){
   if(busy){toast('Jarvis is still answering.');return;}
-  busy=true;stopBriefing();if(voice)showThinking();else openReply();$('#jarvis-state').textContent='Thinking';$('#transcript').replaceChildren();
-  // "Open my tracker": reserve a tab now, while the tap still counts for the pop-up blocker, and point it at the first link in the reply.
-  const opener=/^\s*(?:jarvis[, ]+)?(?:please )?(?:open|pull up|bring up|launch)\b/i.test(message)?window.open('about:blank','_blank'):null;
+  busy=true;stopBriefing();if(voice)showThinking();openReply();$('#jarvis-state').textContent='Thinking';$('#transcript').replaceChildren();
+  // Explicit actions are opened by the PC worker, never by guessing a URL from a model reply.
   const p=document.createElement('p');p.className='brief-line';p.textContent='Connecting…';$('#transcript').append(p);
   let answer='',reader;const controller=new AbortController();
   try{
@@ -99,7 +98,7 @@ async function chat(message){
     if(!r.body)throw new Error('Jarvis returned no response stream. Please try again.');
     reader=r.body.getReader();const decoder=new TextDecoder();let buffer='';
     function event(value){
-      if(value.type==='pc_task')void pcActivity.refresh();
+      if(value.type==='pc_task'){$('#route-chip').textContent='PC worker · choosing available agent';void pcActivity.refresh();}
       if(value.type==='engine')$('#route-chip').textContent=`${value.provider} · ${value.reason||'selected engine'}`;
       if(value.type==='text'){answer+=value.text;p.textContent=answer;}
       if(value.type==='done'&&['claude','codex','gemini'].includes(value.provider)&&typeof value.sessionId==='string'){
@@ -109,10 +108,8 @@ async function chat(message){
     }
     while(true){const {value,done}=await reader.read();buffer+=decoder.decode(value,{stream:!done});let index;while((index=buffer.indexOf('\n'))!==-1){const line=buffer.slice(0,index);buffer=buffer.slice(index+1);if(line.trim())event(JSON.parse(line));}if(done)break;}
     if(buffer.trim())event(JSON.parse(buffer));if(answer)speak(answer);
-    const link=answer.match(/https:\/\/[^\s)<>"'\]]+/)?.[0];
-    if(opener&&link){opener.opener=null;opener.location.href=link;toast('Opened in a new tab.');}else{opener?.close();if(link&&/^\s*(?:jarvis[, ]+)?(?:please )?(?:open|pull up|bring up|launch)\b/i.test(message))toast('Your browser blocked the new tab. Tap the link in the reply.');}
   }catch(e){
-    controller.abort();opener?.close();try{await reader?.cancel();}catch{}
+    controller.abort();try{await reader?.cancel();}catch{}
     p.textContent=answer?`${answer}\n${e.message}`:e.message;speak(e.message);
   }finally{reader?.releaseLock();busy=false;$('#jarvis-state').textContent='Standing by';void refreshRouting();}
 }

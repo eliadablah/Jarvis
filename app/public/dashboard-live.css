@@ -103,7 +103,8 @@
     min-height: 0;
     padding-top: 12px;
     flex: 1;
-    overflow: visible;
+    overflow-y: auto;
+    overflow-x: hidden;
   }
   body.reply-open .shell .companion #transcript .brief-line {
     font-size: 14px;
@@ -114,3 +115,38 @@
 }
 
 .pc-activity{grid-column:1/-1;min-width:0}.pc-help,.pc-empty p{color:var(--muted);line-height:1.7}.pc-task{border-top:1px solid var(--line);padding:18px 0}.pc-task-top,.pc-task-actions{display:flex;gap:12px;align-items:center;justify-content:space-between}.pc-task h3{font-size:15px;margin:12px 0 8px;overflow-wrap:anywhere}.pc-task p{font-size:13px;line-height:1.6;color:var(--muted);overflow-wrap:anywhere}.pc-task-top small{color:var(--muted)}.pc-task[data-status="running"] .tag{color:var(--mint)}.pc-task[data-status="needs_input"] .tag,.pc-task[data-status="needs_attention"] .tag{color:#e7ad6b}.pc-empty{padding:20px 0}.pc-task-actions{justify-content:flex-start}.modal{overflow-wrap:anywhere}
+
+/* Each panel owns its content: long replies cannot paint over cards below. */
+.shell .companion > * { flex-shrink: 0; }
+.shell .companion #transcript {
+  min-height: 96px;
+  min-width: 0;
+  flex: 1 1 145px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--muted, #71917a) transparent;
+  padding-right: 6px;
+}
+.shell .companion #transcript .brief-line {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+@media (min-width: 1201px) {
+  .shell .companion { overflow-y: auto; overflow-x: hidden; }
+  body.reply-open .shell .companion .insight { display: none; }
+  body.reply-open .shell .companion .orb-stage { padding: 12px 0 0; min-height: 0; }
+  body.reply-open .shell .companion .orb { width: 100px; height: 100px; margin-bottom: 0; }
+  body.reply-open .shell .companion .orb-core { width: 50px; height: 50px; }
+  body.reply-open .shell .companion .orb-caption .eyebrow { display: none; }
+  body.reply-open .shell .companion .orb-caption h2 { margin-top: 8px; font-size: 22px; }
+  body.reply-open .shell .companion #transcript { flex-basis: 200px; margin-top: 16px; }
+  body.reply-open .shell .companion .connections { padding-top: 14px; margin-top: 8px; }
+  body.reply-open .shell .companion .reply-close { display: inline-flex; margin-left: 8px; font-size: 10px; }
+}
+@media (max-width: 1200px) {
+  body.reply-open .shell .companion { overflow: hidden; }
+  body.reply-open .shell .companion #transcript { min-height: 0; flex: 1 1 auto; }
+}
