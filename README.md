@@ -16,7 +16,7 @@ I'm building Jarvis as a hands-on DevOps project: I put it together, locked it d
 
 | Layer | What runs it | My setup |
 |---|---|---|
-| Brain | Claude Code or Codex | Jarvis persona, selectable web engine, shared vault |
+| Brain | Claude Code, Codex, or Gemini | Jarvis persona, selectable web engine, shared vault |
 | Memory | Obsidian vault | Raw (inbox) → Wiki (clean notes) → Outputs (finished reports) |
 | Voice | Local speech-to-text and text-to-speech | Push-to-talk, British male voice, ask-before-acting |
 | Face | Browser visualizer | Full-screen circuit-board scene |
@@ -40,7 +40,7 @@ Nothing reaches prod without passing through dev first. Details in [docs/environ
 
 ## Dashboard
 
-Three selectable views, a time-based Auto cycle, saved tasks, voice commands, and quota-aware Claude/Codex routing are available in dev. Gmail and Calendar reads use the connected Codex account. See [dashboard and installed app](docs/dashboard.md) for controls and current limits.
+Three selectable views, a time-based Auto cycle, saved tasks, voice commands, and quota-aware Claude/Codex/Gemini routing are available in dev. Gmail and Calendar reads use the connected Codex account. See [dashboard and installed app](docs/dashboard.md) for controls and current limits.
 
 ## Roadmap
 
@@ -56,7 +56,7 @@ Three selectable views, a time-based Auto cycle, saved tasks, voice commands, an
 - [x] Web app in a Docker container (TypeScript, tested, runs as a non-root user)
 - [x] GitHub Actions: checks on every push, automatic deploys to dev
 - [x] HTTPS on my own domain: `https://dev-jarvis.eliadablah.com`, reachable only on my private network, certificate issued by CI with no AWS credentials on the server
-- [x] Text chat powered by Claude Code or Codex, with separate conversations and read-only vault context. See [Codex setup](docs/codex.md).
+- [x] Text chat powered by Claude Code or Codex, with separate conversations and read-only vault context. See [Codex setup](docs/codex.md) and [Gemini setup](docs/gemini.md).
 - [x] Jarvis reads my Obsidian vault: private repo, read-only deploy key, synced every 5 minutes, read-only tools
 - [x] The local experience on the web: full-screen ai-visualizer face, hold-to-talk mic, and Kokoro `bm_lewis` voice in the browser, with the face moving to the real audio
 - [ ] Approval-gated deploys to prod at `https://jarvis.eliadablah.com` (pipeline ready, waiting on `jarvis-prod`)

@@ -45,10 +45,15 @@ function save(key: string, value: string | undefined): void {
   }
 }
 
-let provider: "claude" | "codex" = "claude";
-if (load("jarvis.engine") === "codex" && !engineSelect.options[1]?.disabled) provider = "codex";
+type Engine = "claude" | "codex" | "gemini";
+/** The saved engine, if it's still offered on this server; otherwise Claude. */
+function pickEngine(value: string | undefined | null): Engine {
+  const option = [...engineSelect.options].find(o => o.value === value);
+  return option && !option.disabled ? (option.value as Engine) : "claude";
+}
+let provider: Engine = pickEngine(load("jarvis.engine"));
 engineSelect.value = provider;
-const sessionKey = () => provider === "claude" ? "jarvis.sessionId" : "jarvis.sessionId.codex";
+const sessionKey = () => provider === "claude" ? "jarvis.sessionId" : `jarvis.sessionId.${provider}`;
 let sessionId = load(sessionKey());
 let busy = false;
 
@@ -248,7 +253,7 @@ toggleChat.addEventListener("click", () => {
 
 engineSelect.addEventListener("change", () => {
   if (busy) return;
-  provider = engineSelect.value === "codex" ? "codex" : "claude";
+  provider = pickEngine(engineSelect.value);
   save("jarvis.engine", provider);
   sessionId = load(sessionKey());
   voice.stop();

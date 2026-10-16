@@ -4,7 +4,8 @@ import type { AppConfig } from "../config.ts";
 import type { ChatRequest } from "../api/chatRequest.ts";
 import { askClaude } from "./claudeCode.ts";
 import { askCodex } from "./codex.ts";
-import type { ChatEvent, ChatFailureCode, ChatProvider } from "./events.ts";
+import { askGemini } from "./gemini.ts";
+import { CHAT_PROVIDERS, type ChatEvent, type ChatFailureCode, type ChatProvider } from "./events.ts";
 import { connectorScope } from "./connectorConfig.ts";
 
 export interface ChatEngine {
@@ -30,8 +31,10 @@ interface RoutingOptions {
   failureCooldownMs?: number;
 }
 
-const PROVIDERS: readonly ChatProvider[] = ["claude", "codex"];
-const label = (provider: ChatProvider): string => provider === "codex" ? "Codex" : "Claude";
+const LABELS: Record<ChatProvider, string> = { claude: "Claude", codex: "Codex", gemini: "Gemini" };
+const label = (provider: ChatProvider): string => LABELS[provider];
+/** Order Auto tries the remaining engines in after its first choice. Gemini is the last resort. */
+const FALLBACK_ORDER: readonly ChatProvider[] = ["claude", "codex", "gemini"];
 
 /** Classify the refusal without returning CLI diagnostics or credentials. */
 export function classifyProviderFailure(message: string): ChatFailureCode {
@@ -59,20 +62,20 @@ export function requiresAccountAccess(message: string): boolean {
 
 function failureMessage(provider: ChatProvider, code: ChatFailureCode, partial: boolean): string {
   if (partial) return `${label(provider)} stopped before finishing its answer. Please try again.`;
-  if (code === "quota") return `${label(provider)} reported a usage limit. Try again later or choose the other engine.`;
-  if (code === "authentication") return `${label(provider)} needs its server sign-in renewed. Choose the other engine for now.`;
-  return `${label(provider)} could not answer. Please try again or choose the other engine.`;
+  if (code === "quota") return `${label(provider)} reported a usage limit. Try again later or choose another engine.`;
+  if (code === "authentication") return `${label(provider)} needs its server sign-in renewed. Choose another engine for now.`;
+  return `${label(provider)} could not answer. Please try again or choose another engine.`;
 }
 
 /** Cooldowns are bounded, and a manual selection can explicitly retry early. */
 export class ChatRouter {
-  private readonly engines: Record<ChatProvider, ChatEngine>;
+  private readonly engines: Partial<Record<ChatProvider, ChatEngine>>;
   private readonly failures = new Map<ChatProvider, FailureState>();
   private readonly now: () => number;
   private readonly quotaCooldownMs: number;
   private readonly failureCooldownMs: number;
 
-  constructor(engines: Record<ChatProvider, ChatEngine>, options: RoutingOptions = {}) {
+  constructor(engines: Partial<Record<ChatProvider, ChatEngine>>, options: RoutingOptions = {}) {
     this.engines = engines;
     this.now = options.now ?? Date.now;
     this.quotaCooldownMs = options.quotaCooldownMs ?? 15 * 60_000;
@@ -80,8 +83,8 @@ export class ChatRouter {
   }
 
   status(): RoutingStatus[] {
-    return PROVIDERS.map(provider => {
-      if (!this.engines[provider].enabled) return { provider, state: "disabled", available: false,
+    return CHAT_PROVIDERS.filter(provider => this.engines[provider]).map(provider => {
+      if (!this.engines[provider]!.enabled) return { provider, state: "disabled", available: false,
         reason: "Not enabled on this server.", remainingTokens: null };
       const failure = this.failures.get(provider);
       if (failure && failure.until > this.now()) return { provider, state: "cooldown", available: false,
@@ -103,22 +106,22 @@ export class ChatRouter {
     const automatic = chat.provider === "auto";
     const preference = automatic ? preferredProvider(chat.message)
       : { provider: chat.provider ?? "claude", reason: "Selected by you." } as { provider: ChatProvider; reason: string };
-    const other: ChatProvider = preference.provider === "claude" ? "codex" : "claude";
     const needsAccountAccess = requiresAccountAccess(chat.message);
-    const supportsTask = (provider: ChatProvider) => !needsAccountAccess || this.engines[provider].accountAccess === true;
+    const supportsTask = (provider: ChatProvider) => !needsAccountAccess || this.engines[provider]?.accountAccess === true;
     if (!automatic && !supportsTask(preference.provider)) {
       yield { type: "error", message: "Connected account reads need Codex with Gmail and Calendar enabled. Choose Auto or Codex." };
       return;
     }
     const statuses = this.status();
     const isReady = (provider: ChatProvider) => supportsTask(provider) && statuses.some(status => status.provider === provider && status.available);
-    const first = automatic && !isReady(preference.provider) && isReady(other) ? other : preference.provider;
-    const attempts: ChatProvider[] = automatic ? [first, first === "claude" ? "codex" : "claude"] : [first];
+    const others = FALLBACK_ORDER.filter(provider => provider !== preference.provider);
+    const attempts: ChatProvider[] = automatic ? [preference.provider, ...others] : [preference.provider];
     let previousFailure: ChatProvider | undefined;
     let lastFailure: { provider: ChatProvider; code: ChatFailureCode } | undefined;
 
     for (const provider of attempts) {
-      if (!supportsTask(provider) || !this.engines[provider].enabled || (automatic && !isReady(provider))) continue;
+      const engine = this.engines[provider];
+      if (!engine || !supportsTask(provider) || !engine.enabled || (automatic && !isReady(provider))) continue;
       const reason = previousFailure ? `${label(previousFailure)} could not answer; switching to ${label(provider)}.`
         : provider !== preference.provider ? `${label(preference.provider)} is unavailable; using ${label(provider)}.` : preference.reason;
       yield { type: "engine", provider, reason };
@@ -129,7 +132,7 @@ export class ChatRouter {
       let emittedText = false;
       let failure: ChatFailureCode | undefined;
       try {
-        for await (const event of this.engines[provider].ask(chat.message, sessionId, signal, chat.serverContext)) {
+        for await (const event of engine.ask(chat.message, sessionId, signal, chat.serverContext)) {
           if (signal.aborted) { yield { type: "error", message: "Request cancelled." }; return; }
           if (event.type === "text") {
             if (event.text) { emittedText = true; yield event; }
@@ -168,7 +171,7 @@ export class ChatRouter {
       return `${label(status.provider)} ${status.reason.charAt(0).toLowerCase()}${status.reason.slice(1).replace(/\.$/, "")}.${wait}`;
     };
     if (needsAccountAccess) {
-      const accountStatus = statuses.find(status => this.engines[status.provider].accountAccess === true);
+      const accountStatus = statuses.find(status => this.engines[status.provider]?.accountAccess === true);
       if (!accountStatus) return "Gmail and Calendar aren't connected on this server.";
       const others = statuses.filter(status => status.provider !== accountStatus.provider).map(status => label(status.provider));
       const noAccess = others.length ? ` ${others.join(" and ")} can't read your accounts yet.` : "";
@@ -188,6 +191,8 @@ export function getChatRouter(config: AppConfig): ChatRouter {
       claude: { enabled: Boolean(config.claude.bin.trim()), ask: (message, sessionId, signal, serverContext) => askClaude(config.claude, message, sessionId, signal, serverContext) },
       codex: { enabled: Boolean(config.codex?.enabled), accountAccess: config.codex?.connectorsEnabled === true,
         ask: (message, sessionId, signal, serverContext) => askCodex(config.codex!, config.claude, message, sessionId, signal, serverContext) },
+      gemini: { enabled: Boolean(config.gemini?.enabled),
+        ask: (message, sessionId, signal, serverContext) => askGemini(config.gemini!, config.claude, message, sessionId, signal, serverContext) },
     });
     routers.set(config, router);
   }

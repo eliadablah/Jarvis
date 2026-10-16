@@ -21,6 +21,7 @@ export const content = {
   engineLabel: "Chat engine",
   claudeLabel: "Claude",
   codexLabel: "Codex",
+  geminiLabel: "Gemini",
   faceNames: { board: "Circuit Board", radial: "Radial", rain: "Face in the Code", neural: "Neural Core" },
   voiceOnLabel: "Voice: on",
   voiceOffLabel: "Voice: off",

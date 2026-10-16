@@ -26,9 +26,19 @@ export interface AppConfig {
   visualizerDir: string;
   claude: ClaudeConfig;
   codex?: CodexConfig;
+  gemini?: GeminiConfig;
 }
 
 export interface CodexConfig { enabled: boolean; bin: string; model: string; connectorsEnabled?: boolean; }
+
+export interface GeminiConfig {
+  /** On only when an API key is present (and not switched off). */
+  enabled: boolean;
+  apiKey: string;
+  model: string;
+  /** Send vault excerpts and dashboard tasks to Gemini. Off by default: on Google's free tier, prompts may be used for training. */
+  shareVault: boolean;
+}
 
 const APP_ENVS: readonly AppEnv[] = ["local", "dev", "prod"];
 
@@ -51,6 +61,12 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
     version: source.APP_VERSION?.trim() || "unknown",
     visualizerDir: source.VISUALIZER_DIR?.trim() || "visualizer",
     codex: { connectorsEnabled: source.CODEX_CONNECTORS_ENABLED === "true", enabled: source.CODEX_ENABLED === "true", bin: source.CODEX_BIN?.trim() || "codex", model: source.CODEX_MODEL?.trim() || "" },
+    gemini: {
+      enabled: Boolean(source.GEMINI_API_KEY?.trim()) && source.GEMINI_ENABLED !== "false",
+      apiKey: source.GEMINI_API_KEY?.trim() || "",
+      model: source.GEMINI_MODEL?.trim() || "gemini-3.8-flash",
+      shareVault: source.GEMINI_SHARE_VAULT === "true",
+    },
     claude: {
       bin: source.CLAUDE_BIN?.trim() || "claude",
       model: source.CLAUDE_MODEL?.trim() || "opus",

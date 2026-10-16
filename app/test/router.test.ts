@@ -191,3 +191,28 @@ test("dashboard reference context is bounded valid JSON and cannot inject block 
   assert.ok(value.tasks.length > 0);
 });
 
+
+test("Auto falls back to Gemini when Claude and Codex both refuse", async () => {
+  const geminiCalls: (string | undefined)[] = [];
+  const router = new ChatRouter({
+    claude:fake([{type:"error",message:"usage limit"}]),
+    codex:fake([{type:"error",message:"quota"}]),
+    gemini:fake(success(CLAUDE_SESSION),geminiCalls),
+  });
+  const result = await collect(router.answer(automatic("Hello"),signal()));
+  assert.deepEqual(result.filter(event => event.type === "engine").map(event => event.provider),["codex","claude","gemini"]);
+  assert.deepEqual(result.at(-1),{type:"done",sessionId:CLAUDE_SESSION,provider:"gemini"});
+  assert.deepEqual(geminiCalls,[undefined]);
+});
+
+test("Gemini never stands in for Gmail or Calendar reads", async () => {
+  const geminiCalls: (string | undefined)[] = [];
+  const router = new ChatRouter({
+    claude:fake(success(CLAUDE_SESSION)),
+    codex:{...fake([{type:"error",message:"quota"}]),accountAccess:true},
+    gemini:fake(success(CLAUDE_SESSION),geminiCalls),
+  });
+  const result = await collect(router.answer(automatic("What's on my calendar today?"),signal()));
+  assert.equal(geminiCalls.length,0);
+  assert.equal(result.at(-1)?.type,"error");
+});

@@ -2,6 +2,13 @@
 
 ## 2026-10-15
 
+### Feature - Gemini as a third chat engine
+
+- Added Gemini (Google's Interactions API over plain `fetch`, model `gemini-3.8-flash`), selectable on the dashboard and in face mode. Auto uses it as the last fallback when Claude and Codex both refuse.
+- Gemini has no tools and never handles Gmail or Calendar questions. It sees no vault notes or tasks unless `GEMINI_SHARE_VAULT=true` (off on dev), because free-tier prompts may be used to train Google's models.
+- The API key goes from the `GEMINI_API_KEY` GitHub secret into the server's deploy-user-only `.env`; without the secret, Gemini stays switched off.
+- Tests: 74 passing (stream parsing, error mapping, three-engine fallback, account-read guard).
+
 ### Fix - Clearer engine errors and auto-closing confirmations
 
 - Found in live testing on dev: with Codex at its usage limit, an account question ("any meetings today?") answered "No chat engine is available… check server sign-in". It now says Gmail and Calendar go through Codex, that Codex reported a usage limit, about how many minutes until it's retried, and that Claude can't read the accounts yet. Other "nothing available" cases describe each engine's actual state instead of blaming sign-in.

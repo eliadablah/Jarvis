@@ -11,6 +11,7 @@
 # Needs CLAUDE_CODE_OAUTH_TOKEN: the one-year Claude Code login, written to
 # a deploy-user-only .env on the server (never into the image or the repo).
 # Needs VAULT_DEPLOY_KEY: the read-only key for the private vault repo.
+# Optional GEMINI_API_KEY: turns on the Gemini engine, kept in the same .env.
 set -euo pipefail
 
 host="$1"
@@ -37,8 +38,11 @@ ssh "${ssh_opts[@]}" "$target" 'cat > ~/jarvis/Caddyfile' < deploy/Caddyfile
 ssh "${ssh_opts[@]}" "$target" 'cat > ~/jarvis/certs/fullchain.pem' < certs/fullchain.pem
 ssh "${ssh_opts[@]}" "$target" 'umask 077 && cat > ~/jarvis/certs/key.pem' < certs/key.pem
 # The token travels over stdin and lands in a file only the deploy user can read.
-printf 'CLAUDE_CODE_OAUTH_TOKEN=%s\n' "$CLAUDE_CODE_OAUTH_TOKEN" \
-  | ssh "${ssh_opts[@]}" "$target" 'umask 077 && cat > ~/jarvis/.env'
+{
+  printf 'CLAUDE_CODE_OAUTH_TOKEN=%s\n' "$CLAUDE_CODE_OAUTH_TOKEN"
+  # Optional: the Gemini engine stays off when the secret isn't set.
+  if [[ -n "${GEMINI_API_KEY:-}" ]]; then printf 'GEMINI_API_KEY=%s\n' "$GEMINI_API_KEY"; fi
+} | ssh "${ssh_opts[@]}" "$target" 'umask 077 && cat > ~/jarvis/.env'
 # Vault sync: the read-only key, GitHub's pinned host keys, and the script.
 printf '%s\n' "$VAULT_DEPLOY_KEY" \
   | ssh "${ssh_opts[@]}" "$target" 'umask 077 && cat > ~/jarvis/vault_key'

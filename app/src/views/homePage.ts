@@ -71,6 +71,7 @@ export function renderHomePage(config: AppConfig): string {
             <select id="engine-select">
               <option value="claude">${escapeHtml(content.claudeLabel)}</option>
               <option value="codex"${config.codex?.enabled ? "" : " disabled"}>${escapeHtml(content.codexLabel)}</option>
+              <option value="gemini"${config.gemini?.enabled ? "" : " disabled"}>${escapeHtml(content.geminiLabel)}</option>
             </select>
           </label>
           <button type="button" id="voice-toggle">${escapeHtml(content.voiceOnLabel)}</button>
