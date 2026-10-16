@@ -15,24 +15,29 @@ Jarvis sends explicit PC requests to an authenticated Windows worker. The PC mus
 | Update my job tracker | Local tracker changes |
 | Open my job tracker / open https://example.com | Read and navigate through the Chrome worker |
 | Open it | Open the one recent reply link; ask for a target if ambiguous |
-| In my Chrome, find the AWS documentation | Read and navigate in Chrome |
+| In my Chrome, find the AWS documentation | Observe and navigate as requested |
+| In my Chrome, edit my Google Sheet | Browser action mode; perform requested edits |
+| Send an email to a named recipient | Browser action mode; resolve missing details before sending |
+| On my PC, organize my Downloads folder | Windows desktop/file task |
+| Open Excel / open Spotify | General desktop agent |
 | In my assistant workspace, create a budget template | Files in that approved workspace |
 | In my jarvis project, review the task router | The configured Jarvis project |
 | Open Calculator / Notepad / File Explorer | Fixed Windows launcher, no model cost |
 | Show PC activity | Open the activity panel |
 | Cancel my PC task | Cancel the single active/queued task; use its button when several exist |
 
-Vague requests to submit drafts ask which drafts. Discussion, status questions and negations do not execute. Unsupported Windows GUI operations need an additional adapter; the worker does not pretend it can click arbitrary apps.
+Vague requests to submit drafts ask which drafts. Discussion, status questions and negations do not execute. The Windows-MCP adapter provides general app/window control, UI inspection, mouse/keyboard input, files and PowerShell with normal Windows user permissions. The worker reports the concrete missing input or Windows restriction when a step cannot execute.
 
 Natural browser requests are normalized on the server to the existing protocol-2 command grammar. Already-running workers validate the same plan without a restart. The selected chat engine does not control dispatch or grant extra permissions. Browser-prefixed application commands retain job scope; singular jobs are capped at one, and smaller explicit limits are preserved. The canonical request is kept for worker validation while the original request is shown in PC activity and the reply transcript. Unsupported actions explain the missing capability; they never claim a queue or successful action. A single reply-link reference lasts at most thirty minutes in bounded private server memory and is lost on a server restart.
 
 ## Agent choice
 
 - Codex is preferred for approved local workspaces. It runs with workspace-write sandboxing and no approvals, with account apps and browser/desktop tools disabled.
-- Claude provides file-only fallback in restricted mode. It cannot run commands or load skills in this adapter.
-- Claude with Chrome handles browser and job tasks. Its login and Chrome extension must be connected. Search, prepare and submit are separate task scopes. Profile and answer-bank files are preloaded with content hashes.
-- Windows directly launches the three supported apps.
-- Numeric remaining tokens are unknown. Observed usage limits pause an agent for fifteen minutes; startup/auth failures pause it for one minute. Fallback happens only before any tools run. Nothing is retried automatically after a possible side effect.
+- Claude provides workspace file/command fallback with explicitly allowed Bash, while unrelated MCP servers, nested agents and skills remain disabled for that adapter.
+- Claude with Chrome handles browser actions and job tasks. Browser observation and browser execution are separate capabilities; execution can fill forms, edit Sheets, upload requested files, send requested messages and change requested calendar entries. Its login and Chrome extension must be connected. Search, prepare and submit are separate task scopes. Profile and answer-bank files are preloaded with content hashes.
+- Claude Computer and Codex Computer use the pinned Windows-MCP stdio adapter for general desktop tasks and provide browser/job fallback. Registry tooling is not exposed; screenshots, app/input, file, PowerShell, process and clipboard tools are available for the requested task. No public/local HTTP service is started, telemetry is off, and platform sandbox profiles are preserved.
+- Windows directly launches the three supported apps without model cost.
+- Numeric remaining tokens are unknown. Observed usage limits pause an agent for fifteen minutes; startup/auth failures pause it for one minute. Provider cooldowns are shared between that provider's adapters, and the executor rechecks availability before each fallback. Fallback happens only before any tools run. Nothing is retried automatically after a possible side effect.
 
 ## Results and recovery
 
@@ -48,7 +53,7 @@ Run from the repository:
 
     powershell -ExecutionPolicy Bypass -File pc-worker\install.ps1
 
-Settings are private in %USERPROFILE%\.jarvis\pc-worker.json. Existing tokens and workspace aliases are preserved; only initial installation or explicit -RotateToken changes the token and requires redeploying the server. Approved workspace aliases map to absolute local paths. The assistant workspace defaults to %USERPROFILE%\.jarvis\workspace.
+Settings are private in %USERPROFILE%\.jarvis\pc-worker.json. Native adapter metadata is separate in %USERPROFILE%\.jarvis\desktop-runtime.json; the worker loads it without changing the protected token file. Existing tokens and workspace aliases are preserved; only initial installation or explicit -RotateToken changes the token and requires redeploying the server. Approved workspace aliases map to absolute local paths. The assistant workspace defaults to %USERPROFILE%\.jarvis\workspace.
 
 The installer sets up a pinned standalone official Codex CLI and a trusted CA bundle. Restart an idle worker after an update from a normal PowerShell window:
 
@@ -59,6 +64,16 @@ A worker started inside another coding agent can inherit that agent’s read-onl
 Use a standalone official Codex CLI for unattended work rather than the desktop app bundled alpha binary. Keep its auth/runtime cache separate in %USERPROFILE%\.jarvis\codex; authenticate that cache with the official Codex login flow. Credentials, settings, reports and caches never belong in the repository.
 
 The worker uses private temporary files for agent stdin/stdout to avoid named-pipe EPERM failures seen on Windows. Temporary prompt/output files are removed after a confirmed exit. Its state/outbox and log stay in %USERPROFILE%\.jarvis.
+
+## Activating action tools
+
+The existing process caches its tools. After installing this update, run once from normal Windows PowerShell:
+
+    powershell -ExecutionPolicy Bypass -File pc-worker/enable-actions.ps1
+
+The helper installs pinned windows-mcp 0.8.8 with a private Python 3.14 runtime if needed, then restarts only an idle worker. PC agents should show six adapters, browser actions ready, and Windows ready. New browser.execute/computer tasks cannot be claimed by older workers; they wait for the updated worker instead of falling back to old read-only instructions. Existing completed/uncertain tasks are never replayed.
+
+Source and license: [Windows-MCP](https://github.com/CursorTouch/Windows-MCP), MIT. Runtime files stay outside the public repository.
 
 ## Checks
 

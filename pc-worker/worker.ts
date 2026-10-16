@@ -19,6 +19,10 @@ function log(message: string): void {
 export async function loadSettings(): Promise<WorkerSettings> {
   const path = join(STATE_DIR, "pc-worker.json");
   const settings = JSON.parse((await readFile(path, "utf8")).replace(/^\uFEFF/, "")) as WorkerSettings;
+  try {
+    const desktop = JSON.parse(await readFile(join(STATE_DIR, "desktop-runtime.json"), "utf8"));
+    if (typeof desktop.windowsMcpCommand === "string" && desktop.transport === "stdio") settings.windowsMcpCommand = desktop.windowsMcpCommand;
+  } catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
   const url = new URL(settings.server);
   if (url.protocol !== "https:" || url.username || url.password || !settings.token || !settings.jobsDir) throw new Error("Invalid PC worker settings.");
   settings.maxApplications = Math.min(25, Math.max(1, Number.isFinite(settings.maxApplications) ? settings.maxApplications! : 10));
@@ -67,13 +71,15 @@ async function execute(settings: WorkerSettings, state: LocalState, task: Claime
     let result = emptyReport("needs_input", "No available agent has this task's tools.");
     for (const id of chooseAgents(task.plan, agentStatuses(settings, state.cooldowns))) {
       if (controller.signal.aborted) break;
+      if (agentStatuses(settings, state.cooldowns).find(e => e.id === id)?.state !== "ready") continue;
       executor = id; progress = "Starting " + id + "."; await heartbeat();
       const run = await runAgent(id, settings, task, controller.signal, text => { progress = text; });
       result = run.report;
       if (run.failure) {
         const wait = { until: Date.now() + (run.failure === "quota" ? 15 * 60_000 : 60_000), reason: run.report.summary };
         state.cooldowns[id] = wait;
-        if (id.startsWith("claude-")) { state.cooldowns["claude-files"] = wait; state.cooldowns["claude-chrome"] = wait; }
+        if (id.startsWith("claude-")) { state.cooldowns["claude-files"] = wait; state.cooldowns["claude-chrome"] = wait; state.cooldowns["claude-computer"] = wait; }
+        if (id.startsWith("codex-")) { state.cooldowns["codex-local"] = wait; state.cooldowns["codex-computer"] = wait; }
         await saveState(STATE_DIR, state);
       }
       if (!canFallback(run)) break;

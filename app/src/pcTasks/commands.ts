@@ -14,12 +14,15 @@ function resolveJobCommand(text: string): PcCommand | undefined {
   if (!/^(?:apply|submit|finish|complete|find|search|look for|prepare|draft|tailor|fill out|fill in|update|log|add)\b/i.test(action)) return;
   if (/^apply\b.*\bjokes?\b/i.test(action))
     return clarify('I heard "apply to a joke". Did you mean apply to one job? Nothing has been queued or submitted.');
+  if (!/\b(?:jobs?|roles?|positions?|openings?|vacancies|applications?|job tracker|application tracker)\b/i.test(action) && !/linkedin|indeed/i.test(text)) return;
   const request = action + (mixed || actionText !== text ? "\nOriginal requested context: " + text : "");
   const intent = parsePcIntent(request);
   if (intent?.type === "clarify") return { request, intent };
   if (intent?.type !== "task" || intent.plan.kind !== "jobs") {
-    if (mixed && /^(?:apply|submit)\b/i.test(action))
-      return clarify('Which job should I apply to, and how many? Name the role or job link. Nothing has been queued.');
+    if (mixed && /^(?:apply|submit)\b/i.test(action) && /linkedin|indeed/i.test(text)) {
+      const canonical = "Apply to 1 job applications. " + text;
+      return { request: canonical, intent: parsePcIntent(canonical)! };
+    }
     return;
   }
   if (intent.plan.action !== "submit") return { request, intent };
@@ -43,12 +46,38 @@ export function resolvePcCommand(message: string, previousLink?: string): PcComm
     .replace(/^(?:hey\s+)?jarvis[,!:\s]+/i, "")
     .replace(/^(?:please\s+)?(?:(?:can|could|would|will) you\s+|i (?:want|need) you to\s+)?(?:please\s+)?/i, "")
     .replace(/^go (?:and )?(?!to\b)/i, "");
+  // Questions that explicitly need local PC state are read requests for the
+  // desktop executor; they do not authorize changing that state.
+  if (/^(?:what(?:'s| is| are)?|where|which|show|list|check|read|find|search)\b/i.test(text) && /\b(?:on my (?:pc|computer)|my (?:desktop|downloads|documents folder)|running programs|open windows)\b/i.test(text)) {
+    const request = "On my PC, execute this task: " + text;
+    return { request, intent: parsePcIntent(request)! };
+  }
   // Never turn discussion, quotes, negation or permission bypasses into actions.
   if (/^(?:don't|do not|not|never|how|what|why|when|did|is|are|if|imagine|explain|tell me|remind|help|plan|should|would|["'“])\b/i.test(text) || /^["'“]/.test(text)) return;
   if (/\b(?:ignore|bypass|disable|override)\b.{0,35}\b(?:permission|guardrail|rule|safety|sandbox)/i.test(text)) return;
   text = text.replace(/^on my (?:pc|computer)[,:]?\s+(?=(?:open|pull up|bring up|launch|visit|navigate to|go to)\b)/i, "");
   const job = resolveJobCommand(text);
   if (job) return job;
+  const native = /^on my (?:pc|computer)[,:]?\s+(.+)/i.exec(text);
+  const browser = /^in (?:my )?(?:chrome|browser)[,:]?\s+(.+)/i.exec(text);
+  if (native && !/^execute this task:/i.test(native[1]!)) {
+    const request = "On my PC, execute this task: " + native[1];
+    return { request, intent: parsePcIntent(request)! };
+  }
+  const browserAction = /^(?:send|reply|forward|upload|download|fill|submit|book|schedule|update|edit|change|delete|save|click|type|press|create|add|move|rename)\b/i;
+  if (browser && (browserAction.test(browser[1]!) || /\b(?:and|then)\s+(?:send|reply|forward|upload|fill|submit|book|schedule|update|edit|change|delete|save|click|type|press|create|add)\b/i.test(browser[1]!))) {
+    const request = "In my Chrome, execute this task: " + browser[1];
+    return { request, intent: parsePcIntent(request)! };
+  }
+  if (browserAction.test(text) && /\b(?:gmail|emails?|inbox|google (?:sheets?|calendar|docs)|spreadsheet|calendar|website|webpage|in (?:my )?(?:chrome|browser)|https?:\/\/)/i.test(text)) {
+    const request = "In my Chrome, execute this task: " + text;
+    return { request, intent: parsePcIntent(request)! };
+  }
+  if (/^(?:open|launch|start|close|switch|move|rename|copy|paste|delete|create|write|edit|fix|build|test|run|install|uninstall|download|upload|organize|clean|fill|update|turn|enable|disable|set)\b/i.test(text) &&
+      /\b(?:excel|word|outlook|notepad|calculator|file explorer|windows|powershell|terminal|my (?:pc|computer|desktop|downloads|documents)|files?|folders?)\b|\b[a-z]:[\\/]/i.test(text) && !/^(?:open|launch|start) (?:my |the )?(?:calculator|notepad|file explorer)[.!]?$/i.test(text)) {
+    const request = "On my PC, execute this task: " + text;
+    return { request, intent: parsePcIntent(request)! };
+  }
   const direct = parsePcIntent(text);
   if (direct) return { request: text, intent: direct };
   const open = /^(?:open|pull up|bring up|launch|visit|navigate to|go to)\s+(.+?)\s*[.!]?$/i.exec(text);
@@ -58,8 +87,11 @@ export function resolvePcCommand(message: string, previousLink?: string): PcComm
       if (!previousLink) return clarify("Which link should I open on your PC? Paste it here or name the website or tracker.");
       target = previousLink;
     }
-    if (/\b(?:calculator|notepad|file explorer|powershell|terminal|cmd|excel|word|settings)\b/i.test(target) && !/https?:\/\//i.test(target))
-      return clarify("I can open Calculator, Notepad or File Explorer directly, and websites through your Chrome worker. Control inside other Windows apps isn't connected yet. Name a website or an approved workspace for this task.");
+    if (/^(?:javascript|data|chrome|about):/i.test(target)) return clarify("Send a normal http or https website link.");
+    if (!/https?:\/\/|\b(?:gmail|linkedin|google|website|webpage|tracker|sheets?|calendar)\b|[a-z0-9-]+\.(?:com|org|net|io|dev|edu)\b/i.test(target)) {
+      const request = "On my PC, execute this task: open " + target;
+      return { request, intent: parsePcIntent(request)! };
+    }
     if (/\b(?:file|javascript|data|chrome|about):|\b[a-z]:[\\/]|\\\\/i.test(target))
       return clarify("Send a normal http or https website link, or name an approved workspace for a local file.");
     const url = /https?:\/\/[^\s<>"']+/i.exec(target)?.[0];
@@ -71,7 +103,8 @@ export function resolvePcCommand(message: string, previousLink?: string): PcComm
     // workspace. Never invent or publish a user's private tracker URL.
     const tracker = /\b(?:job|application) tracker\b/i.test(target)
       ? " Locate its saved URL in the approved jobs workspace notes if necessary; do not invent a URL or create a replacement tracker." : "";
-    const request = "In my Chrome, open " + target + tracker;
+    const changes = /\b(?:and|then)\s+(?:send|reply|forward|upload|fill|submit|book|schedule|update|edit|change|delete|save|click|type|press|create|add)\b/i.test(target);
+    const request = "In my Chrome, " + (changes ? "execute this task: open " : "open ") + target + tracker;
     return { request, intent: parsePcIntent(request)! };
   }
   if (/^(?:search(?: for)?|find|look up|look for|read|check|summari[sz]e|compare)\b/i.test(text) &&
@@ -79,8 +112,12 @@ export function resolvePcCommand(message: string, previousLink?: string): PcComm
     const request = "In my Chrome, " + text.replace(/^look (?:up|for)\b/i, "find");
     return { request, intent: parsePcIntent(request)! };
   }
+  if (/^(?:send|reply|forward|upload|download|book|schedule|click|type|press|move|rename|copy|paste|install|uninstall)\b/i.test(text)) {
+    const request = "On my PC, execute this task: " + text;
+    return { request, intent: parsePcIntent(request)! };
+  }
   if (/^(?:send|reply|forward|delete|purchase|buy|pay|install|download|click|type|move|rename)\b/i.test(text) || /^(?:create|write|edit|fix|run)\b/i.test(text) && /\b(?:pc|computer|files?|folders?|workspace|repo|project)\b|\.[a-z0-9]{1,6}\b/i.test(text))
-    return clarify('Tell me the target for that action: for local files, say "in my assistant workspace, ..."; for job applications, say "apply to ... jobs". Chrome currently supports reading and opening pages. Other account changes and arbitrary Windows controls are not connected yet. Nothing has been queued.');
+    return clarify('Tell me the target for that action: for local files, say "in my assistant workspace, ..."; for job applications, say "apply to ... jobs". For desktop work, say "on my PC, ...". For browser actions, say "in my Chrome, ...". The worker chooses an available agent with the required tools. Nothing has been queued.');
   return;
 }
 

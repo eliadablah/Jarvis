@@ -36,10 +36,12 @@ if ($settings.needsTokenSync) {
   if ($LASTEXITCODE -ne 0) { throw "Could not save the GitHub secret; rerun setup to retry the same token." }
   $settings.needsTokenSync = $false
 }
-# Install/use the pinned official CLI and a separate private runtime cache.
+# Install/use private pinned agent and desktop runtimes.
 $codexSetup = Join-Path $PSScriptRoot "setup-codex.ts"
 node $codexSetup
 if ($LASTEXITCODE -ne 0) { throw "Could not set up standalone Codex." }
+node (Join-Path $PSScriptRoot "setup-desktop.ts")
+if ($LASTEXITCODE -ne 0) { throw "Could not set up Windows desktop action tools." }
 $codexSettings = Get-Content -LiteralPath $settingsPath -Raw | ConvertFrom-Json
 $settings.codexBin = $codexSettings.codexBin
 $settings.codexHome = $codexSettings.codexHome

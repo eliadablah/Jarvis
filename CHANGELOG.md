@@ -2,6 +2,13 @@
 
 ## 2026-10-16
 
+### Feature - Requested browser actions and general Windows execution
+
+- Added browser execution and computer capabilities. Requested browser edits, messages, form work and calendar updates no longer use a forced read-only prompt. Windows-MCP provides app, screen/input, file and command tools to local Claude and Codex adapters.
+- Added shared provider cooldowns and capability-based desktop/browser fallback. Workspace Claude can execute requested checks. Existing platform sandbox profiles remain intact.
+- Installed/configured a pinned private Windows runtime; activation requires restarting the idle worker once with pc-worker/enable-actions.ps1. Older workers cannot claim new action tasks. The dashboard reports action readiness separately from worker connectivity.
+- Native MCP startup and tool inventory passed. Automated scope/dispatch tests passed; real desktop execution remains pending the worker restart.
+
 ### Fix - Job commands keep their scope after opening a browser
 
 - "In my Chrome, open LinkedIn and apply to a job" uses the application worker scope, capped at one, instead of read-only browsing. Explicit smaller limits, zero, and no-submit instructions remain enforced.

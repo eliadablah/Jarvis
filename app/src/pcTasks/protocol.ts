@@ -1,11 +1,12 @@
 // Shared by the private server and Windows worker. No credentials here.
 export const PC_PROTOCOL = 2;
 export const MAX_REQUEST_CHARS = 2000;
-export const CAPABILITIES = ["jobs", "browser", "workspace", "desktop.launch"] as const;
+export const CAPABILITIES = ["jobs", "browser", "browser.execute", "workspace", "computer", "desktop.launch"] as const;
 export type Capability = typeof CAPABILITIES[number];
 export type PcPlan =
   | { kind: "jobs"; action: "search" | "prepare" | "submit" | "track"; maxApplications: number }
-  | { kind: "browser"; action: "browse" }
+  | { kind: "browser"; action: "browse" | "execute" }
+  | { kind: "computer"; action: "execute" }
   | { kind: "workspace"; action: "execute"; workspace: string }
   | { kind: "desktop"; action: "open_app"; app: "calculator" | "notepad" | "explorer" };
 export type Outcome = "completed" | "partial" | "needs_input" | "failed" | "cancelled";
@@ -15,7 +16,7 @@ export interface ExecutorStatus {
   id: string; capabilities: Capability[]; state: "ready" | "cooldown" | "unavailable";
   reason: string; retryAt?: string; remainingTokens: null;
 }
-export function capabilityFor(plan: PcPlan): Capability { return plan.kind === "desktop" ? "desktop.launch" : plan.kind; }
+export function capabilityFor(plan: PcPlan): Capability { return plan.kind === "desktop" ? "desktop.launch" : plan.kind === "browser" && plan.action === "execute" ? "browser.execute" : plan.kind; }
 export const REPORT_SCHEMA = {
   type: "object", additionalProperties: false,
   required: ["outcome", "summary", "evidence", "needsInput", "submitted"],

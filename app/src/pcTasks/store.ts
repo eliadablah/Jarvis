@@ -71,7 +71,8 @@ export function claimNextPcTask(dir: string, workerId: string, executors: Execut
     const candidates = executors.filter(e => e.capabilities.includes(capabilityFor(task.plan!)));
     if (!candidates.some(e => e.state === "ready")) {
       task.progress = candidates.some(e => e.state === "cooldown") ? "Waiting for a capable agent's usage limit to reset." : "No ready agent has the required tools. Check PC agents.";
-      if (!candidates.some(e => e.state === "cooldown")) { task.status = "needs_input"; task.result = task.progress; }
+      if (!candidates.length && ["computer", "browser.execute"].includes(capabilityFor(task.plan))) { task.progress = "Waiting for the updated PC worker to connect its action tools. Restart the idle worker to activate them."; }
+      else if (!candidates.some(e => e.state === "cooldown")) { task.status = "needs_input"; task.result = task.progress; }
       return;
     }
     task.status = "running"; task.startedAt = now.toISOString(); task.heartbeatAt = now.toISOString();

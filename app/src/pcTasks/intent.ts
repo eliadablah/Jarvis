@@ -13,6 +13,10 @@ export function parsePcIntent(message: string): PcIntent | undefined {
   const workspace = /^(?:in|inside) (?:my |the )?([a-z][a-z0-9_-]{0,40}) (?:workspace|project|repo)[,:]?\s+(.+)/i.exec(text);
   if (workspace && /^(?:create|write|edit|fix|build|test|run|organize|read|summari[sz]e|review|check|list|update)\b/i.test(workspace[2]!))
     return { type: "task", plan: { kind: "workspace", action: "execute", workspace: workspace[1]!.toLowerCase() } };
+  if (/^on my (?:pc|computer)[,:]?\s+execute this task:\s+\S/i.test(text))
+    return { type: "task", plan: { kind: "computer", action: "execute" } };
+  if (/^in (?:my )?(?:chrome|browser)[,:]?\s+execute this task:\s+\S/i.test(text))
+    return { type: "task", plan: { kind: "browser", action: "execute" } };
   if (/^(?:in (?:my )?(?:chrome|browser)[,:]?\s+|on my (?:pc|computer)[,:]?\s+)/i.test(text)) {
     if (/^in (?:my )?(?:chrome|browser)[,:]?\s+(?:open|find|search|read|check|summari[sz]e|compare|navigate)\b/i.test(text))
       return { type: "task", plan: { kind: "browser", action: "browse" } };

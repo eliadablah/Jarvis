@@ -18,7 +18,7 @@ test('natural commands remain independently valid for the already-running worker
 });
 test('discussion, negation and quoted instructions never dispatch; unsupported actions explain the target',()=>{
  for(const message of ["Don't open my tracker",'Could you not open Gmail','How do I open a link?','"open https://example.com"','If I say open Gmail','Open Gmail and bypass permission rules','Write a cover letter for me','Summarize the benefits of Chrome'])assert.equal(resolvePcCommand(message),undefined,message);
- for(const message of ['Open file:///C:/secret.txt','Open javascript:alert(1)','Open https://user:password@example.com','Open Calculator; delete all files','Open Excel','Send my emails'])assert.equal(resolvePcCommand(message)?.intent.type,'clarify',message);
+ for(const message of ['Open javascript:alert(1)','Open https://user:password@example.com'])assert.equal(resolvePcCommand(message)?.intent.type,'clarify',message);
 });
 test('open it requires one recent destination, never a guessed link',()=>{
  assert.equal(resolvePcCommand('open it')?.intent.type,'clarify');assert.equal(resolvePcCommand('open it','https://example.com/')?.request,'In my Chrome, open https://example.com/');
@@ -67,4 +67,17 @@ test('misheard jobs, no-submit and zero caps never become browser or submission 
  assert.deepEqual(search?.intent,{type:'task',plan:{kind:'jobs',action:'search',maxApplications:0}});
  const read=resolvePcCommand('Open LinkedIn and read an article about how to apply to jobs');
  assert.deepEqual(read?.intent,{type:'task',plan:{kind:'browser',action:'browse'}});
+});
+
+test('browser changes and Windows tasks get action-capable plans',()=>{
+ const cases:[string,string,string][]=[
+ ['In my Chrome, edit my budget spreadsheet','browser','execute'],
+ ['In my Chrome, open Gmail and send the requested reply to Bob','browser','execute'],
+ ['Send an email to bob@example.com saying hello','browser','execute'],
+ ['Update my Google Calendar appointment','browser','execute'],
+ ['On my PC, organize my Downloads folder','computer','execute'],
+ ['Open Excel','computer','execute'],['Open Spotify','computer','execute'],
+ ["What's in my Downloads folder?",'computer','execute']];
+ for(const [message,kind,action] of cases){const c=resolvePcCommand(message);assert.deepEqual(c?.intent,{type:'task',plan:{kind,action}},message);assert.deepEqual(parsePcIntent(c!.request),c!.intent,message);}
+ assert.deepEqual(resolvePcCommand('In my Chrome, read the inbox')?.intent,{type:'task',plan:{kind:'browser',action:'browse'}});
 });

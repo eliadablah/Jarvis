@@ -64,7 +64,7 @@ export async function handleChat(req: IncomingMessage, res: ServerResponse, conf
   // Reports from the PC worker, so "how did the job applying go?" has an answer.
   try {
     const state = await readPcTasks(dashboardDir(config));
-    chat.serverContext += "\n" + JSON.stringify({ source: "Current Jarvis PC capabilities", enabled: Boolean(config.pcWorkerToken), online: workerOnline(state), executors: state.executors ?? [], browserScope: "read and navigate", desktopApps: ["calculator", "notepad", "explorer"] });
+    chat.serverContext += "\n" + JSON.stringify({ source: "Current Jarvis PC capabilities", enabled: Boolean(config.pcWorkerToken), online: workerOnline(state), browserActionReady: state.executors?.some(e => e.state === "ready" && e.capabilities.includes("browser.execute")) ?? false, desktopActionReady: state.executors?.some(e => e.state === "ready" && e.capabilities.includes("computer")) ?? false, executors: state.executors ?? [], browserScope: "requested browser actions; observation requests stay read-only", computerScope: "requested Windows app, file and command actions when a desktop agent is connected", desktopApps: ["calculator", "notepad", "explorer"] });
     if (state.tasks.length) chat.serverContext += "\n" + pcTaskContext(state.tasks);
   } catch { /* no reports yet */ }
 

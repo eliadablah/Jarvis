@@ -10,7 +10,7 @@ import { validateReport, emptyReport, type PcPlan, type ExecutorStatus } from ".
 import { enqueuePcTask, claimNextPcTask, heartbeatPcTask, finishPcTask, cancelPcTask, pcSnapshot, readPcTasks, publicTask, workerOnline } from "../app/src/pcTasks/store.ts";
 import { handlePcTasks } from "../app/src/pcTasks/api.ts";
 import { loadConfig } from "../app/src/config.ts";
-import { agentStatuses, chooseAgents, canFallback, reportedRun, refusal, jobPrompt, codexArgs, claudeArgs } from "./agents.ts";
+import { agentStatuses, chooseAgents, canFallback, reportedRun, refusal, jobPrompt, codexArgs, claudeArgs, promptFor } from "./agents.ts";
 import { readState, saveState, acquireWorkerLock } from "./persistence.ts";
 import { validateClaim, deliverReport } from "./worker.ts";
 const agents: ExecutorStatus[] = [{ id: "claude-chrome", capabilities: ["jobs", "browser"], state: "ready", reason: "", remainingTokens: null }];
@@ -172,3 +172,21 @@ test("a valid no-tool permission refusal falls back, but a possibly acted-on run
   assert.equal(canFallback(reportedRun(refused,scope,false)),true);
   assert.equal(canFallback(reportedRun(refused,scope,true)),false);
 });
+
+test('both engines receive native MCP tools while retaining platform sandbox controls',()=>{
+ const settings={server:'https://example.com',token:'test',jobsDir:'.',claudeBin:'claude',codexBin:'codex',windowsMcpCommand:'C:/private/windows-mcp.exe'};
+ const native=plan('On my PC, execute this task: open Excel');
+ const statuses=agentStatuses(settings,{},0);
+ assert.deepEqual(chooseAgents(native,statuses),['claude-computer','codex-computer']);
+ assert.deepEqual(chooseAgents(plan('In my Chrome, execute this task: edit the spreadsheet'),statuses),['claude-chrome','claude-computer','codex-computer']);
+ const args=claudeArgs(native,settings);assert.ok(args.includes('--mcp-config'));assert.match(args.join(' '),/jarvis-windows/);assert.match(args.join(' '),/ANONYMIZED_TELEMETRY/);assert.ok(!args.includes('--dangerously-skip-permissions'));
+ assert.match(codexArgs(settings,true).join(' '),/mcp_servers.jarvis-windows.command/);assert.ok(codexArgs(settings,true).includes('workspace-write'));
+ assert.match(promptFor({id:'test',workerId:'worker',lease:'lease',plan:native,request:'Open Excel'}),/Computer action mode/);
+ assert.match(promptFor({id:'test',workerId:'worker',lease:'lease',plan:plan('In my Chrome, execute this task: edit the spreadsheet'),request:'Edit the spreadsheet'}),/Browser action mode/);
+});
+test('old workers cannot claim native actions; new capability claims validate',async()=>withDir(async dir=>{
+ const task=await enqueuePcTask(dir,'On my PC, execute this task: open Excel');
+ assert.equal(await claimNextPcTask(dir,'old',agents),undefined);assert.equal((await readPcTasks(dir)).tasks[0]?.status,'queued');
+ const desktop:ExecutorStatus[]=[{id:'claude-computer',capabilities:['computer'],state:'ready',reason:'',remainingTokens:null}];
+ const claimed=(await claimNextPcTask(dir,'new',desktop))!;assert.equal(claimed.id,task.id);assert.equal(validateClaim(claimed,'new').id,task.id);
+}));
