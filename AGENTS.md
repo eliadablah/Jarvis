@@ -9,7 +9,7 @@ Keep project status and daily notes accurate. Never store secrets in notes.
 `CLAUDE.md` contains local operating preferences.
 
 Use dev before production. Verify deployment before reporting it live.
-Web chat can read selected vault excerpts, but cannot write or control the PC.
+Web model tools read selected vault excerpts and allowlisted account data. Explicit PC requests use the authenticated local worker with scoped plans and reports; server models never gain shell or desktop tools.
 Do not change Windows deny rules on `.git`. GitHub APIs may save authorized
 changes with an expected parent and a non-forced branch update; record the
 remote commit and local HEAD mismatch.

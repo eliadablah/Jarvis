@@ -35,6 +35,7 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - run: npm run typecheck
       - run: npm test
+      - run: npm run test:pc
       - run: npm run build
 
   terraform:

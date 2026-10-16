@@ -112,3 +112,5 @@
     overflow-wrap: anywhere;
   }
 }
+
+.pc-activity{grid-column:1/-1;min-width:0}.pc-help,.pc-empty p{color:var(--muted);line-height:1.7}.pc-task{border-top:1px solid var(--line);padding:18px 0}.pc-task-top,.pc-task-actions{display:flex;gap:12px;align-items:center;justify-content:space-between}.pc-task h3{font-size:15px;margin:12px 0 8px;overflow-wrap:anywhere}.pc-task p{font-size:13px;line-height:1.6;color:var(--muted);overflow-wrap:anywhere}.pc-task-top small{color:var(--muted)}.pc-task[data-status="running"] .tag{color:var(--mint)}.pc-task[data-status="needs_input"] .tag,.pc-task[data-status="needs_attention"] .tag{color:#e7ad6b}.pc-empty{padding:20px 0}.pc-task-actions{justify-content:flex-start}.modal{overflow-wrap:anywhere}

@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "..",
+    "noEmit": true
+  },
+  "include": [
+    "../pc-worker/*.ts",
+    "src/pcTasks/protocol.ts",
+    "src/pcTasks/intent.ts"
+  ]
+}

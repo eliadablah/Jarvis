@@ -1,18 +1,26 @@
-// Turns a job-hunting chat message into a queued PC errand and the reply
-// Jarvis gives straight away. The actual work happens on my PC.
-
 import { randomUUID } from "node:crypto";
 import type { ChatEvent } from "../brain/events.ts";
-import { enqueuePcTask, readPcTasks, workerOnline } from "./store.ts";
-
-export async function* handOffJobErrand(dir: string, message: string, sessionId: string | undefined): AsyncGenerator<ChatEvent> {
-  const online = workerOnline(await readPcTasks(dir));
-  await enqueuePcTask(dir, message);
-  yield {
-    type: "text",
-    text: online
-      ? "On it, sir. I've handed this to your PC. It's working in your Chrome now, using your profile, answer bank and tracker. Ask me \"how did the job applying go?\" for the report."
-      : "Queued, sir. Your PC worker looks offline right now, so this starts as soon as your PC is on and you're signed in. Ask me \"how did the job applying go?\" later for the report.",
-  };
-  yield { type: "done", sessionId: sessionId ?? randomUUID() };
+import type { PcIntent } from "./intent.ts";
+import { enqueuePcTask, pcSnapshot, cancelPcTask, workerOnline } from "./store.ts";
+export async function* handOffPcErrand(dir: string, message: string, intent: PcIntent, requestId?: string): AsyncGenerator<ChatEvent> {
+  let text: string;
+  if (intent.type === "clarify") text = intent.message;
+  else if (intent.type === "cancel") {
+    const candidates = (await pcSnapshot(dir)).tasks.filter(t => ["queued", "running", "cancelling"].includes(t.status));
+    if (candidates.length !== 1) text = candidates.length ? "There is more than one PC task. Use the cancel button beside the task you want to stop." : "There are no queued or running PC tasks to cancel.";
+    else {
+      const task = await cancelPcTask(dir, candidates[0]!.id);
+      text = task?.status === "cancelled" ? "Cancelled before it started." : "Stop requested. I'll show confirmation from your PC. Actions already completed cannot be undone.";
+    }
+  } else {
+    try {
+      const state = await pcSnapshot(dir);
+      const task = await enqueuePcTask(dir, message, requestId);
+      const scope = intent.plan.kind === "jobs" ? ({ search: "Search only; no applications will be submitted.", prepare: "Prepare drafts only; no applications will be submitted.", submit: "Submit only the job applications you requested, with confirmation evidence.", track: "Update the job tracker only." })[intent.plan.action] : intent.plan.kind === "workspace" ? "Work only in the approved " + intent.plan.workspace + " workspace." : intent.plan.kind === "browser" ? "Read and navigate in Chrome; no sending, purchasing, or account changes." : "Open " + intent.plan.app + " on your PC.";
+      text = "Queued on your PC. " + scope + (workerOnline(state) ? " The worker will choose a capable available agent." : " Your PC worker is offline; it will wait for your PC.") + " Follow progress in PC activity.";
+      yield { type: "pc_task", taskId: task.id };
+    } catch (e) { text = e instanceof Error ? e.message : "Could not queue the PC task."; }
+  }
+  yield { type: "text", text };
+  yield { type: "done", sessionId: randomUUID() };
 }

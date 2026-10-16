@@ -4,6 +4,7 @@ export const CHAT_PROVIDERS: readonly ChatProvider[] = ["claude", "codex", "gemi
 export type ChatFailureCode = "quota" | "authentication" | "unavailable";
 
 export type ChatEvent =
+  | { type: "pc_task"; taskId: string }
   | { type: "engine"; provider: ChatProvider; reason: string }
   | { type: "text"; text: string }
   | { type: "done"; sessionId: string; provider?: ChatProvider }

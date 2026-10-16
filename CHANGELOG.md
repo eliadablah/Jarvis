@@ -2,6 +2,14 @@
 
 ## 2026-10-16
 
+### Feature - Scoped PC tasks, protocol 2 (built with Codex)
+
+- PC requests now parse into a fixed plan before anything is queued: job search / prepare / submit (with a submission cap) / tracker, browser read-and-navigate ("in my Chrome, find ..."), work inside a named approved workspace ("in my assistant workspace, ..."), or opening Calculator, Notepad or File Explorer. Questions, negations, and requests to bypass permissions never execute.
+- The worker picks a capable local agent (Codex for workspace files, Claude with Chrome for jobs and browsing, Windows for app launch) and falls back only if one refuses before using any tools. Claude runs restricted (no Bash, skills or sub-agents) with a JSON report schema.
+- Reports are structured and checked: submissions must match confirmation evidence with distinct URLs and stay within the cap; a clean process exit alone no longer counts as done.
+- Leases, heartbeats, cancel (button or "cancel my PC task"), durable local reports, a single-instance lock, and a recovery hold after an interrupted run prevent duplicate actions. Old protocol-1 workers can no longer claim tasks.
+- Dashboard shows PC activity. `install.ps1` keeps the existing token unless `-RotateToken` is passed. CI runs the new worker tests (`npm run test:pc`).
+
 ### Change - "Open ..." opens the link in a new tab
 
 - Starting a message with "open", "pull up", "bring up" or "launch" (for example "open my job tracker") now opens the first link in Jarvis's reply in a new tab. The tab is reserved at the moment of the tap so pop-up blockers allow it; if the browser still blocks it, a notice points to the link in the reply.

@@ -16,6 +16,7 @@ const SESSION_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-
 export const CHAT_HEADER = "x-jarvis-chat";
 
 export interface ChatRequest {
+  requestId?: string;
   message: string;
   sessionId: string | undefined;
   provider?: ChatProvider | "auto";
@@ -78,7 +79,8 @@ export function parseChatRequest(body: string): ChatRequest {
     throw new ChatRequestError(400, "Body must be an object.");
   }
 
-  const { message, sessionId, provider, sessions } = data as Record<string, unknown>;
+  const { message, sessionId, provider, sessions, requestId } = data as Record<string, unknown>;
+  if (requestId !== undefined && (typeof requestId !== "string" || !isValidSessionId(requestId))) throw new ChatRequestError(400, "Invalid request ID.");
 
   if (provider !== undefined && provider !== "auto" && !CHAT_PROVIDERS.includes(provider as ChatProvider)) throw new ChatRequestError(400, "Invalid chat engine.");
   if (typeof message !== "string" || !message.trim()) {
@@ -110,5 +112,6 @@ export function parseChatRequest(body: string): ChatRequest {
   }
 
   return { message: message.trim(), sessionId: typeof sessionId === "string" ? sessionId : undefined,
+    ...(typeof requestId === "string" ? { requestId } : {}),
     ...(provider ? {provider: provider as ChatProvider | "auto"} : {}), ...(checkedSessions ? {sessions: checkedSessions} : {}) };
 }

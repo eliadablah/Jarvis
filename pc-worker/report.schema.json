@@ -1,0 +1,59 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "outcome",
+    "summary",
+    "evidence",
+    "needsInput",
+    "submitted"
+  ],
+  "properties": {
+    "outcome": {
+      "type": "string",
+      "enum": [
+        "completed",
+        "partial",
+        "needs_input",
+        "failed"
+      ]
+    },
+    "summary": {
+      "type": "string"
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "action",
+          "target",
+          "detail"
+        ],
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "target": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "needsInput": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "submitted": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 25
+    }
+  }
+}

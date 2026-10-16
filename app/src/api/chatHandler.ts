@@ -9,8 +9,8 @@ import type { ChatEvent } from "../brain/events.ts";
 import { ChatRequestError, checkRequestSource, parseChatRequest, readBody } from "./chatRequest.ts";
 import { dashboardDir, readDashboard, type DashboardTask } from "../dashboard.ts";
 import { pcTaskContext } from "../pcTasks/api.ts";
-import { handOffJobErrand } from "../pcTasks/handoff.ts";
-import { isJobErrand } from "../pcTasks/intent.ts";
+import { handOffPcErrand } from "../pcTasks/handoff.ts";
+import { parsePcIntent } from "../pcTasks/intent.ts";
 import { readPcTasks } from "../pcTasks/store.ts";
 
 let busy = false;
@@ -45,7 +45,8 @@ export async function handleChat(req: IncomingMessage, res: ServerResponse, conf
     throw err;
   }
 
-  if (chat.provider === "codex" && !config.codex?.enabled) return sendError(res, 503, "Codex is not connected yet. Select Claude.");
+  const pcIntent = parsePcIntent(chat.message);
+  if (!pcIntent && chat.provider === "codex" && !config.codex?.enabled) return sendError(res, 503, "Codex is not connected yet. Select Claude.");
   if (busy) return sendError(res, 429, "Jarvis is still answering. Try again in a moment.");
   busy = true;
 
@@ -74,8 +75,8 @@ export async function handleChat(req: IncomingMessage, res: ServerResponse, conf
   const send = (event: ChatEvent) => res.write(`${JSON.stringify(event)}\n`);
 
   // Job hunting is an errand for my PC (pc-worker/), not a chat answer.
-  const events = config.pcWorkerToken && isJobErrand(chat.message)
-    ? handOffJobErrand(dashboardDir(config), chat.message, chat.sessions?.claude ?? chat.sessionId)
+  const events = pcIntent
+    ? handOffPcErrand(dashboardDir(config), chat.message, config.pcWorkerToken ? pcIntent : { type: "clarify", message: "The PC worker is not enabled on this server." }, chat.requestId)
     : getChatRouter(config).answer(chat, abort.signal);
 
   try {
