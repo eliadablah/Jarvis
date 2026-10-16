@@ -36,7 +36,7 @@ export interface GeminiConfig {
   enabled: boolean;
   apiKey: string;
   model: string;
-  /** Tried once when the main model is overloaded (HTTP 503). */
+  /** Tried once when the main model is overloaded or rate-limited (HTTP 429/500/503). */
   fallbackModel: string;
   /** Send vault excerpts and dashboard tasks to Gemini. Off by default: on Google's free tier, prompts may be used for training. */
   shareVault: boolean;

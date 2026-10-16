@@ -106,7 +106,8 @@ export async function* askGemini(config: GeminiConfig, memory: ClaudeConfig, mes
   const previousId = sessionId ? threads.get(sessionId) : undefined;
   const timeout = AbortSignal.timeout(memory.timeoutMs);
 
-  // Google answers 503 "high demand" for busy models; retry once on the backup model.
+  // Busy (500/503) or rate-limited (429) models get one retry on the backup
+  // model; free-tier limits are counted per model.
   const models = [config.model, config.fallbackModel].filter((m, i, all) => m && all.indexOf(m) === i);
   let res: Response | undefined;
   for (const model of models) {
@@ -121,7 +122,11 @@ export async function* askGemini(config: GeminiConfig, memory: ClaudeConfig, mes
       yield { type: "error", code: "unavailable", message: signal.aborted ? "Request cancelled." : FAILURE_TEXT.unavailable };
       return;
     }
-    if (res.status !== 503 && res.status !== 500) break;
+    if (res.ok) break;
+    // Status code and model only; the key and prompt are never logged.
+    console.warn(`gemini: ${model} answered HTTP ${res.status}`);
+    if (![429, 500, 503].includes(res.status) || model === models.at(-1)) break;
+    await res.body?.cancel().catch(() => undefined);
   }
 
   if (!res || !res.ok || !res.body) {

@@ -4,7 +4,7 @@
 
 ### Fix - Gemini retries on a backup model when Google is busy
 
-- First live test on dev: `gemini-3.8-flash` answered 503 "high demand", so Jarvis showed "Gemini could not answer". Jarvis now retries once on `gemini-3.5-flash-lite` (`GEMINI_FALLBACK_MODEL`) when the main model returns 500/503.
+- First live test on dev: `gemini-3.8-flash` answered 503 "high demand", so Jarvis showed "Gemini could not answer". Jarvis now retries once on `gemini-3.5-flash-lite` (`GEMINI_FALLBACK_MODEL`) when the main model returns 429, 500, or 503 (free-tier limits are per model). The server log records the model and status code, never the key or prompt.
 
 ### Feature - Gemini as a third chat engine
 
