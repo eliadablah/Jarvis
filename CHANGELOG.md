@@ -2,6 +2,13 @@
 
 ## 2026-10-15
 
+### Codex chat and shared memory
+
+- The menu can switch between Claude and Codex, with separate conversation IDs. Codex receives bounded markdown excerpts from the same vault and has no command tools or connected apps.
+- Project instructions connect local Codex work to the vault. Desktop chat transcripts are not automatically synchronized.
+- The server image includes Codex and system CA certificates; authentication stays in its private persistent home volume.
+
+
 ### Fix - Voice never stalls on slow devices
 
 - On dev, Kokoro took ~33 seconds to make 2.6 seconds of speech in the test browser, so Jarvis sat on "thinking" for minutes on long answers.

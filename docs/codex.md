@@ -5,7 +5,7 @@ separate conversation ID; switching never sends one provider's ID to the other.
 Claude stays the default. Codex is offered only when CODEX_ENABLED=true.
 
 The image includes Codex CLI 0.163.0. It runs with read-only sandboxing,
-approvals denied, user configuration ignored, and command tools disabled.
+approvals denied, user configuration ignored, and command tools, account-connected apps, computer use, browser use, and image viewing disabled. The image installs the system CA certificate bundle for authenticated HTTPS connections.
 The app supplies bounded markdown excerpts from the shared vault, selecting
 the vault index, priorities, and notes with names matching the question.
 Retrieval excludes hidden paths, symlinks, and non-markdown files. This is

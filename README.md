@@ -10,13 +10,13 @@ I'm building Jarvis as a hands-on DevOps project: I put it together, locked it d
 - **Chats from anywhere I'm signed in.** A web chat on my private network streams Jarvis's answers as it writes them.
 - **Talks.** I hold a key, speak, and it answers through my speakers.
 - **Has a face.** A full-screen visualizer reacts while it listens, thinks, and speaks.
-- **Takes action, with permission.** It can edit files and run commands, but it says out loud what it's about to do and waits for my "yes".
+- **Takes action locally, with permission.** The PC assistant asks before edits or commands. Web chat stays read-only.
 
 ## How I set it up
 
 | Layer | What runs it | My setup |
 |---|---|---|
-| Brain | Claude Code | Custom Jarvis identity and boot file |
+| Brain | Claude Code or Codex | Jarvis persona, selectable web engine, shared vault |
 | Memory | Obsidian vault | Raw (inbox) → Wiki (clean notes) → Outputs (finished reports) |
 | Voice | Local speech-to-text and text-to-speech | Push-to-talk, British male voice, ask-before-acting |
 | Face | Browser visualizer | Full-screen circuit-board scene |
@@ -52,7 +52,7 @@ Nothing reaches prod without passing through dev first. Details in [docs/environ
 - [x] Web app in a Docker container (TypeScript, tested, runs as a non-root user)
 - [x] GitHub Actions: checks on every push, automatic deploys to dev
 - [x] HTTPS on my own domain: `https://dev-jarvis.eliadablah.com`, reachable only on my private network, certificate issued by CI with no AWS credentials on the server
-- [x] Text chat with Jarvis on the site, powered by Claude Code (talk only, no tools yet)
+- [x] Text chat powered by Claude Code or Codex, with separate conversations and read-only vault context. See [Codex setup](docs/codex.md).
 - [x] Jarvis reads my Obsidian vault: private repo, read-only deploy key, synced every 5 minutes, read-only tools
 - [x] The local experience on the web: full-screen ai-visualizer face, hold-to-talk mic, and Kokoro `bm_lewis` voice in the browser, with the face moving to the real audio
 - [ ] Approval-gated deploys to prod at `https://jarvis.eliadablah.com` (pipeline ready, waiting on `jarvis-prod`)
