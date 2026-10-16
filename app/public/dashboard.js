@@ -88,6 +88,8 @@ $('#add-task').onclick=()=>{modal('Your next move','<label for="new-task">Task</
 async function chat(message){
   if(busy){toast('Jarvis is still answering.');return;}
   busy=true;stopBriefing();if(voice)showThinking();else openReply();$('#jarvis-state').textContent='Thinking';$('#transcript').replaceChildren();
+  // "Open my tracker": reserve a tab now, while the tap still counts for the pop-up blocker, and point it at the first link in the reply.
+  const opener=/^\s*(?:jarvis[, ]+)?(?:please )?(?:open|pull up|bring up|launch)\b/i.test(message)?window.open('about:blank','_blank'):null;
   const p=document.createElement('p');p.className='brief-line';p.textContent='Connecting…';$('#transcript').append(p);
   let answer='',reader;const controller=new AbortController();
   try{
@@ -105,8 +107,10 @@ async function chat(message){
     }
     while(true){const {value,done}=await reader.read();buffer+=decoder.decode(value,{stream:!done});let index;while((index=buffer.indexOf('\n'))!==-1){const line=buffer.slice(0,index);buffer=buffer.slice(index+1);if(line.trim())event(JSON.parse(line));}if(done)break;}
     if(buffer.trim())event(JSON.parse(buffer));if(answer)speak(answer);
+    const link=answer.match(/https:\/\/[^\s)<>"'\]]+/)?.[0];
+    if(opener&&link){opener.opener=null;opener.location.href=link;toast('Opened in a new tab.');}else{opener?.close();if(link&&/^\s*(?:jarvis[, ]+)?(?:please )?(?:open|pull up|bring up|launch)\b/i.test(message))toast('Your browser blocked the new tab. Tap the link in the reply.');}
   }catch(e){
-    controller.abort();try{await reader?.cancel();}catch{}
+    controller.abort();opener?.close();try{await reader?.cancel();}catch{}
     p.textContent=answer?`${answer}\n${e.message}`:e.message;speak(e.message);
   }finally{reader?.releaseLock();busy=false;$('#jarvis-state').textContent='Standing by';void refreshRouting();}
 }

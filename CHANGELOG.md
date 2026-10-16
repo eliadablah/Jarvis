@@ -2,6 +2,10 @@
 
 ## 2026-10-16
 
+### Change - "Open ..." opens the link in a new tab
+
+- Starting a message with "open", "pull up", "bring up" or "launch" (for example "open my job tracker") now opens the first link in Jarvis's reply in a new tab. The tab is reserved at the moment of the tap so pop-up blockers allow it; if the browser still blocks it, a notice points to the link in the reply.
+
 ### Change - PC worker takes any job-search errand
 
 - Chat now hands the PC worker requests to submit or finish prepared applications ("submit the Dexian application", "submit all drafts", "submit 4 and 5") and to update the tracker, not only "apply to jobs".
