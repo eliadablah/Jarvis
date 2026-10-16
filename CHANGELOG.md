@@ -2,6 +2,12 @@
 
 ## 2026-10-15
 
+### Fix - Clearer engine errors and auto-closing confirmations
+
+- Found in live testing on dev: with Codex at its usage limit, an account question ("any meetings today?") answered "No chat engine is available… check server sign-in". It now says Gmail and Calendar go through Codex, that Codex reported a usage limit, about how many minutes until it's retried, and that Claude can't read the accounts yet. Other "nothing available" cases describe each engine's actual state instead of blaming sign-in.
+- Short confirmations (view switched, task added, task completed) close the reply panel after 6 seconds, so it no longer covers views A and B. Real answers and errors stay open until closed.
+- Tests: 68 passing (adds the cooldown message case).
+
 ### Dashboard views and connected assistant
 
 - Added Evergreen A, orange Daylight B, and Mission Control C, with an automatic daily cycle and spoken view commands.

@@ -157,7 +157,25 @@ export class ChatRouter {
     }
 
     if (lastFailure) yield { type: "error", message: failureMessage(lastFailure.provider, lastFailure.code, false), code: lastFailure.code };
-    else yield { type: "error", message: "No chat engine is available right now. Check server sign-in or try again shortly." };
+    else yield { type: "error", message: this.nothingTriedMessage(needsAccountAccess, statuses) };
+  }
+
+  /** Explains why no engine was tried, instead of a generic sign-in hint. */
+  private nothingTriedMessage(needsAccountAccess: boolean, statuses: RoutingStatus[]): string {
+    const describe = (status: RoutingStatus): string => {
+      const minutes = status.retryAt ? Math.max(1, Math.ceil((Date.parse(status.retryAt) - this.now()) / 60_000)) : undefined;
+      const wait = minutes ? ` It will be tried again in about ${minutes} minute${minutes === 1 ? "" : "s"}.` : "";
+      return `${label(status.provider)} ${status.reason.charAt(0).toLowerCase()}${status.reason.slice(1).replace(/\.$/, "")}.${wait}`;
+    };
+    if (needsAccountAccess) {
+      const accountStatus = statuses.find(status => this.engines[status.provider].accountAccess === true);
+      if (!accountStatus) return "Gmail and Calendar aren't connected on this server.";
+      const others = statuses.filter(status => status.provider !== accountStatus.provider).map(status => label(status.provider));
+      const noAccess = others.length ? ` ${others.join(" and ")} can't read your accounts yet.` : "";
+      return `Gmail and Calendar go through ${label(accountStatus.provider)}. ${describe(accountStatus)}${noAccess}`;
+    }
+    const unavailable = statuses.filter(status => !status.available);
+    return unavailable.length ? unavailable.map(describe).join(" ") : "No chat engine is available right now. Try again shortly.";
   }
 }
 

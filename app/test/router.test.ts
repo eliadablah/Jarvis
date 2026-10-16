@@ -135,6 +135,23 @@ test("account quota exhaustion does not fall back to an engine with no account a
   assert.equal(claudeCalls.length,0);
 });
 
+test("an account question during Codex's cooldown explains the limit instead of blaming sign-in", async () => {
+  let clock = 1_000_000;
+  const router = new ChatRouter({claude:fake(success(CLAUDE_SESSION)),
+    codex:{...fake([{type:"error",message:"usage limit"}]),accountAccess:true}}, {now: () => clock});
+  await collect(router.answer(automatic("Check my calendar"),signal()));   // Codex hits its limit
+  clock += 60_000;
+  const result = await collect(router.answer(automatic("Any meetings today?"),signal()));
+  const last = result.at(-1);
+  assert.equal(last?.type, "error");
+  const message = last?.type === "error" ? last.message : "";
+  assert.match(message, /Gmail and Calendar go through Codex/);
+  assert.match(message, /usage limit/i);
+  assert.match(message, /about 14 minutes/);
+  assert.match(message, /Claude can't read your accounts yet/);
+  assert.doesNotMatch(message, /sign-in/i);
+});
+
 test("routing and connector scope agree for account-related schedule, bill and briefing requests", () => {
   for (const message of ["Show my schedule", "Upcoming interviews", "Check bills", "Plan my day"]) {
     assert.equal(requiresAccountAccess(message),true);
