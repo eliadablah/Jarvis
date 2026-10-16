@@ -39,7 +39,8 @@ function log(message: string): void {
 // --- Settings ---
 async function loadSettings(): Promise<WorkerSettings> {
   const path = join(homedir(), ".jarvis", "pc-worker.json");
-  const value = JSON.parse(await readFile(path, "utf8")) as WorkerSettings;
+  // Windows PowerShell 5.1 writes UTF-8 with a byte-order mark, which JSON.parse rejects.
+  const value = JSON.parse((await readFile(path, "utf8")).replace(/^﻿/, "")) as WorkerSettings;
   if (!value.server?.startsWith("https://") || !value.token || !value.jobsDir) {
     throw new Error(`${path} needs server (https), token, and jobsDir.`);
   }
@@ -151,4 +152,10 @@ async function main(): Promise<void> {
   }
 }
 
-if (import.meta.main) await main();
+if (import.meta.main) {
+  await main().catch(error => {
+    // Startup failures would otherwise vanish with no window to show them.
+    log(`stopped: ${error instanceof Error ? error.message : String(error)}`);
+    process.exitCode = 1;
+  });
+}
