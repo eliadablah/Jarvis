@@ -77,7 +77,7 @@ export async function handlePcTasks(req: IncomingMessage, res: ServerResponse, p
   }
 }
 export function pcTaskContext(tasks: PcTask[]): string {
-  const recent = tasks.slice(-5).map(t => ({ id: t.id, request: t.request.slice(0, 300), status: t.status,
+  const recent = tasks.slice(-5).map(t => ({ id: t.id, request: (t.displayRequest ?? t.request).slice(0, 300), status: t.status,
     executor: t.executor, progress: t.progress, report: t.report ?? t.result?.slice(0, 1500) }));
   return JSON.stringify({ source: "PC agent reports, not independent verification. Legacy done means process exit only.", recent })
     .replace(/</g, "\\u003c").replace(/>/g, "\\u003e").replace(/&/g, "\\u0026");

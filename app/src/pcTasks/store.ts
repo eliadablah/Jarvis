@@ -6,7 +6,7 @@ import { MAX_REQUEST_CHARS, capabilityFor, validateReport, type PcPlan, type PcR
 export { MAX_REQUEST_CHARS } from "./protocol.ts";
 export type PcTaskStatus = "queued" | "running" | "cancelling" | "completed" | "partial" | "needs_input" | "needs_attention" | "failed" | "cancelled" | "done";
 export interface PcTask {
-  id: string; kind: PcPlan["kind"]; request: string; plan?: PcPlan; status: PcTaskStatus;
+  id: string; kind: PcPlan["kind"]; request: string; displayRequest?: string; plan?: PcPlan; status: PcTaskStatus;
   createdAt: string; startedAt?: string; finishedAt?: string; result?: string;
   workerId?: string; lease?: string; heartbeatAt?: string; executor?: string; progress?: string;
   cancelRequested?: boolean; report?: PcReport; reportId?: string; requestId?: string;
@@ -49,7 +49,7 @@ async function mutate<T>(dir: string, change: (state: PcTaskState) => T, now = n
   try { return await result; } finally { if (pending.get(dir) === result) pending.delete(dir); }
 }
 export function pcSnapshot(dir: string, now = new Date()): Promise<PcTaskState> { return mutate(dir, s => s, now); }
-export function enqueuePcTask(dir: string, request: string, requestId?: string, now = new Date()): Promise<PcTask> {
+export function enqueuePcTask(dir: string, request: string, requestId?: string, now = new Date(), displayRequest?: string): Promise<PcTask> {
   if (request.length > MAX_REQUEST_CHARS) throw new Error("PC request exceeds 2000 characters; shorten it without removing limits.");
   const intent = parsePcIntent(request);
   if (intent?.type !== "task") throw new Error("Name an explicit PC action.");
@@ -58,7 +58,7 @@ export function enqueuePcTask(dir: string, request: string, requestId?: string, 
     if (existing) { if (existing.request !== request) throw new Error("Request ID already used."); return existing; }
     if (state.tasks.filter(active).length >= 100) throw new Error("PC queue is full.");
     const task: PcTask = { id: randomUUID(), kind: intent.plan.kind, plan: intent.plan, request,
-      status: "queued", createdAt: now.toISOString(), ...(requestId ? { requestId } : {}) };
+      status: "queued", createdAt: now.toISOString(), ...(displayRequest ? { displayRequest: displayRequest.slice(0, MAX_REQUEST_CHARS) } : {}), ...(requestId ? { requestId } : {}) };
     state.tasks.push(task); return task;
   }, now);
 }
@@ -113,6 +113,6 @@ export function workerOnline(state: PcTaskState, now = Date.now()): boolean {
   return Boolean(state.workerSeenAt && now - Date.parse(state.workerSeenAt) < LEASE_MS);
 }
 /** Do not expose the bearer-equivalent claim lease to browsers or chat models. */
-export function publicTask(task: PcTask): Omit<PcTask, "lease" | "workerId" | "reportId" | "requestId"> {
-  const { lease, workerId, reportId, requestId, ...view } = task; return view;
+export function publicTask(task: PcTask): Omit<PcTask, "lease" | "workerId" | "reportId" | "requestId" | "displayRequest"> {
+  const { lease, workerId, reportId, requestId, displayRequest, ...view } = task; return { ...view, request: displayRequest ?? view.request };
 }

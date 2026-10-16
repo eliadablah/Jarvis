@@ -150,3 +150,5 @@
   body.reply-open .shell .companion { overflow: hidden; }
   body.reply-open .shell .companion #transcript { min-height: 0; flex: 1 1 auto; }
 }
+
+.shell .companion #transcript .request-line { margin:0 0 14px; padding-bottom:12px; border-bottom:1px solid var(--line,#2a3b2d); font-size:11px; line-height:1.6; color:var(--mint,#b8eccb); white-space:pre-wrap; overflow-wrap:anywhere; }

@@ -2,6 +2,40 @@ import { parsePcIntent, type PcIntent } from "./intent.ts";
 
 export interface PcCommand { request: string; intent: PcIntent; }
 const clarify = (message: string): PcCommand => ({ request: "", intent: { type: "clarify", message } });
+
+const COUNT_WORDS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"];
+function countValue(value: string): number { return /^\d+$/.test(value) ? Number(value) : COUNT_WORDS.indexOf(value.toLowerCase()); }
+/** An application is a jobs action even when the user first names Chrome or
+ * asks to open LinkedIn. Preserve all original limits in the canonical request. */
+function resolveJobCommand(text: string): PcCommand | undefined {
+  const actionText = text.replace(/^in (?:my )?(?:chrome|browser)[,:]?\s+/i, "");
+  const mixed = /^(?:open|visit|go to|navigate to|pull up|bring up)\s+(.+?)\s+(?:and|then)[,\s]+(.+)$/i.exec(actionText);
+  const action = mixed ? mixed[2]! : actionText;
+  if (!/^(?:apply|submit|finish|complete|find|search|look for|prepare|draft|tailor|fill out|fill in|update|log|add)\b/i.test(action)) return;
+  if (/^apply\b.*\bjokes?\b/i.test(action))
+    return clarify('I heard "apply to a joke". Did you mean apply to one job? Nothing has been queued or submitted.');
+  const request = action + (mixed || actionText !== text ? "\nOriginal requested context: " + text : "");
+  const intent = parsePcIntent(request);
+  if (intent?.type === "clarify") return { request, intent };
+  if (intent?.type !== "task" || intent.plan.kind !== "jobs") {
+    if (mixed && /^(?:apply|submit)\b/i.test(action))
+      return clarify('Which job should I apply to, and how many? Name the role or job link. Nothing has been queued.');
+    return;
+  }
+  if (intent.plan.action !== "submit") return { request, intent };
+  let amount = intent.plan.maxApplications;
+  const primary = /\b(?:apply(?:\s+(?:to|for))?|submit|finish|complete)\s+(?:(?:my|the|these|those|up to)\s+)?(\d+|zero|one|two|three|four|five|six|seven|eight|nine|ten)\b/i.exec(action);
+  if (primary) amount = Math.min(25, countValue(primary[1]!));
+  else if (/^(?:apply(?:\s+(?:to|for))?|submit|finish|complete)\s+(?:my\s+)?(?:a|an|this|that|the)\b.{0,90}\b(?:job|role|position|application)\b/i.test(action) ||
+      /^apply\b.*https?:\/\/(?:www\.)?linkedin\.com\/jobs\/view\/\d+/i.test(action)) amount = 1;
+  const limits = /\b(?:up to|at most|no more than|only|maximum(?: of)?)\s+(\d+|zero|one|two|three|four|five|six|seven|eight|nine|ten)\b(?=\s*(?:[.,!?;]|$)|\s+(?:[a-z-]+\s+){0,4}(?:jobs?|roles?|positions?|applications?)\b)/gi;
+  for (const limit of action.matchAll(limits)) amount = Math.min(amount, countValue(limit[1]!));
+  // Existing workers reparse this exact numeric cap, including zero. Keeping
+  // original text means no-submit instructions still prevent a submission.
+  const canonical = "Apply to " + amount + " job applications. " + request;
+  return { request: canonical, intent: parsePcIntent(canonical)! };
+}
+
 /** Normalize explicit user commands before enqueueing. Keep the protocol-2 grammar
  * unchanged so an already-running worker can independently validate every plan. */
 export function resolvePcCommand(message: string, previousLink?: string): PcCommand | undefined {
@@ -13,6 +47,8 @@ export function resolvePcCommand(message: string, previousLink?: string): PcComm
   if (/^(?:don't|do not|not|never|how|what|why|when|did|is|are|if|imagine|explain|tell me|remind|help|plan|should|would|["'“])\b/i.test(text) || /^["'“]/.test(text)) return;
   if (/\b(?:ignore|bypass|disable|override)\b.{0,35}\b(?:permission|guardrail|rule|safety|sandbox)/i.test(text)) return;
   text = text.replace(/^on my (?:pc|computer)[,:]?\s+(?=(?:open|pull up|bring up|launch|visit|navigate to|go to)\b)/i, "");
+  const job = resolveJobCommand(text);
+  if (job) return job;
   const direct = parsePcIntent(text);
   if (direct) return { request: text, intent: direct };
   const open = /^(?:open|pull up|bring up|launch|visit|navigate to|go to)\s+(.+?)\s*[.!]?$/i.exec(text);

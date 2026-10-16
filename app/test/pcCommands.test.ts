@@ -8,7 +8,7 @@ import { randomUUID } from 'node:crypto';
 import { resolvePcCommand, replyLink } from '../src/pcTasks/commands.ts';
 import { parsePcIntent } from '../src/pcTasks/intent.ts';
 import { handleChat } from '../src/api/chatHandler.ts';
-import { readPcTasks } from '../src/pcTasks/store.ts';
+import { readPcTasks, publicTask } from '../src/pcTasks/store.ts';
 import { loadConfig } from '../src/config.ts';
 test('natural commands remain independently valid for the already-running worker',()=>{
  for(const message of ['Open my job tracker Google Sheet in Chrome','Please open https://example.com','Jarvis, can you pull up my application tracker?','Go to https://example.com','Bring up my Gmail','On my PC open https://example.com','Read my email in Chrome']){
@@ -34,5 +34,37 @@ test('HTTP chat queues ordinary open requests even when selected Codex chat is d
   const first=await send('Open my job tracker Google Sheet in Chrome');assert.equal(first[0].type,'pc_task');assert.match(first[1].text,/Queued on your PC/);await send('Open my job tracker Google Sheet in Chrome');
   const state=await readPcTasks(dir);assert.equal(state.tasks.length,1);assert.equal(state.tasks[0]?.kind,'browser');assert.equal(parsePcIntent(state.tasks[0]!.request)?.type,'task');
   const ambiguous=await send('Open it');assert.equal(ambiguous.some(e=>e.type==='pc_task'),false);
+  const misheard=await send('In my Chrome, open LinkedIn and apply to a joke for me');assert.equal(misheard.some(e=>e.type==='pc_task'),false);assert.match(misheard.find(e=>e.type==='text').text,/Did you mean/);
+  const jobId=randomUUID();const original='In my Chrome, open LinkedIn and apply to a job for me';
+  const submitted=await fetch("http://127.0.0.1:"+address.port+"/api/chat",{method:'POST',headers:{'Content-Type':'application/json','X-Jarvis-Chat':'1'},body:JSON.stringify({message:original,provider:'codex',requestId:jobId})});
+  assert.equal(submitted.status,200);assert.match(await submitted.text(),/up to 1/);
+  const queued=(await readPcTasks(dir)).tasks[1]!;assert.deepEqual(queued.plan,{kind:'jobs',action:'submit',maxApplications:1});assert.equal(publicTask(queued).request,original);assert.deepEqual(parsePcIntent(queued.request),{type:'task',plan:queued.plan});
  }finally{await new Promise<void>(resolve=>server.close(()=>resolve()));if(previous===undefined)delete process.env.JARVIS_DATA_DIR;else process.env.JARVIS_DATA_DIR=previous;await rm(dir,{recursive:true,force:true});}
+});
+
+test('compound browser/job commands carry the application scope and exact requested cap',()=>{
+ const cases:[string,number][]=[
+  ['In my Chrome, open LinkedIn and apply to a job for me',1],
+  ['Open LinkedIn and apply to one remote support job',1],
+  ['In my Chrome, apply for a support role',1],
+  ['Apply to this job https://www.linkedin.com/jobs/view/12345',1],
+  ['Open LinkedIn then apply to three support jobs',3],
+  ['In my Chrome, find and apply to jobs up to two applications',2],
+  ['Apply to 3 jobs but only one',1],
+  ['Apply to 3 jobs with only one resume',3],
+  ['Apply to 3 jobs but at most 2 applications',2],
+ ];
+ for(const [message,cap] of cases){
+  const c=resolvePcCommand(message);assert.equal(c?.intent.type,'task',message);
+  assert.deepEqual(c?.intent,{type:'task',plan:{kind:'jobs',action:'submit',maxApplications:cap}},message);
+  assert.deepEqual(parsePcIntent(c!.request),c!.intent,message);
+ }
+});
+test('misheard jobs, no-submit and zero caps never become browser or submission tasks',()=>{
+ for(const message of ['In my Chrome, open LinkedIn and apply to a joke for me','Open LinkedIn and apply to jobs but do not submit','Apply to 3 jobs but only zero','In my Chrome, apply to zero jobs'])
+  assert.equal(resolvePcCommand(message)?.intent.type,'clarify',message);
+ const search=resolvePcCommand('Open LinkedIn and find support jobs but do not apply');
+ assert.deepEqual(search?.intent,{type:'task',plan:{kind:'jobs',action:'search',maxApplications:0}});
+ const read=resolvePcCommand('Open LinkedIn and read an article about how to apply to jobs');
+ assert.deepEqual(read?.intent,{type:'task',plan:{kind:'browser',action:'browse'}});
 });

@@ -82,7 +82,7 @@ export async function handleChat(req: IncomingMessage, res: ServerResponse, conf
 
   // Job hunting is an errand for my PC (pc-worker/), not a chat answer.
   const events = pcIntent
-    ? handOffPcErrand(dashboardDir(config), pcCommand!.request, config.pcWorkerToken ? pcIntent : { type: "clarify", message: "The PC worker is not enabled on this server." }, chat.requestId)
+    ? handOffPcErrand(dashboardDir(config), pcCommand!.request, config.pcWorkerToken ? pcIntent : { type: "clarify", message: "The PC worker is not enabled on this server." }, chat.requestId, chat.message)
     : getChatRouter(config).answer(chat, abort.signal);
 
   let reply = "";

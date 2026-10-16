@@ -2,6 +2,12 @@
 
 ## 2026-10-16
 
+### Fix - Job commands keep their scope after opening a browser
+
+- "In my Chrome, open LinkedIn and apply to a job" uses the application worker scope, capped at one, instead of read-only browsing. Explicit smaller limits, zero, and no-submit instructions remain enforced.
+- Misheard "apply to a joke" asks for clarification before anything queues. The reply panel shows the original typed or spoken request, and PC activity shows the user's wording instead of internal worker normalization.
+- Verified 94 tests and protocol-2 compatibility without restarting the worker. No real applications were submitted in these checks.
+
 ### Fix - Natural PC actions and readable replies
 
 - Ordinary requests such as "open my job tracker", "open this link" and "on my PC open ..." route to the authenticated PC worker before any chat model. The running protocol-2 worker needs no restart. Agent choice follows capability and observed availability.

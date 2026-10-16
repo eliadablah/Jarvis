@@ -9,6 +9,8 @@ Jarvis sends explicit PC requests to an authenticated Windows worker. The PC mus
 | Find support jobs but do not apply | Search only; no submissions |
 | Prepare job applications for Acme | Local drafts; no submissions |
 | Apply to three support jobs | Up to three submissions, within the local configured cap |
+| In my Chrome, open LinkedIn and apply to a job | Job application scope, at most one submission |
+| Apply to a joke | Clarify the speech transcription; do not queue |
 | Submit my prepared job applications for Acme | Only the named applications |
 | Update my job tracker | Local tracker changes |
 | Open my job tracker / open https://example.com | Read and navigate through the Chrome worker |
@@ -22,7 +24,7 @@ Jarvis sends explicit PC requests to an authenticated Windows worker. The PC mus
 
 Vague requests to submit drafts ask which drafts. Discussion, status questions and negations do not execute. Unsupported Windows GUI operations need an additional adapter; the worker does not pretend it can click arbitrary apps.
 
-Natural browser requests are normalized on the server to the existing protocol-2 command grammar. Already-running workers validate the same plan without a restart. The selected chat engine does not control dispatch or grant extra permissions. Unsupported actions explain the missing capability; they never claim a queue or successful action. A single reply-link reference lasts at most thirty minutes in bounded private server memory and is lost on a server restart.
+Natural browser requests are normalized on the server to the existing protocol-2 command grammar. Already-running workers validate the same plan without a restart. The selected chat engine does not control dispatch or grant extra permissions. Browser-prefixed application commands retain job scope; singular jobs are capped at one, and smaller explicit limits are preserved. The canonical request is kept for worker validation while the original request is shown in PC activity and the reply transcript. Unsupported actions explain the missing capability; they never claim a queue or successful action. A single reply-link reference lasts at most thirty minutes in bounded private server memory and is lost on a server restart.
 
 ## Agent choice
 
