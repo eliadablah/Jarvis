@@ -80,3 +80,5 @@ Source and license: [Windows-MCP](https://github.com/CursorTouch/Windows-MCP), M
 From app/: npm run typecheck, npm test, npm run test:pc, npm run build. CI runs both server and worker checks. The Linux image contains server code only; the worker runs on Windows.
 
 No automatic job submissions, real emails, purchases or account changes are part of the integration smoke tests.
+
+Restart checks use bounded Node HTTPS with certificate validation. Failed preflight leaves the existing worker alone. Check Tailscale if the private dev status cannot be reached. Windows-MCP 0.8.8 requires the verified exclusion filter: --exclude-tools Registry,DisplayInventory,Scrape exposes the intended 18 tools; its explicit --tools filter exposed zero with the installed FastMCP registry.

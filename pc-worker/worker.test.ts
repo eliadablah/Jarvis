@@ -13,8 +13,24 @@ import { loadConfig } from "../app/src/config.ts";
 import { agentStatuses, chooseAgents, canFallback, reportedRun, refusal, jobPrompt, codexArgs, claudeArgs, promptFor } from "./agents.ts";
 import { readState, saveState, acquireWorkerLock } from "./persistence.ts";
 import { validateClaim, deliverReport } from "./worker.ts";
+import { readWorkerActivity } from "./status.ts";
 const agents: ExecutorStatus[] = [{ id: "claude-chrome", capabilities: ["jobs", "browser"], state: "ready", reason: "", remainingTokens: null }];
 const clock = new Date("2026-10-16T12:00:00Z");
+test("restart status keeps active tasks, bounds HTTPS and omits private data", async () => {
+  const status = await readWorkerActivity("https://jarvis.example/", (async (url, options) => {
+    assert.equal(String(url), "https://jarvis.example/api/pc/tasks");
+    assert.equal(options?.redirect, "error");
+    assert.ok(options?.signal);
+    assert.equal(options?.headers, undefined);
+    return Response.json({ protocol: 2, workerOnline: true, workerSeenAt: clock.toISOString(),
+      tasks: [{ status: "running", request: "private request", lease: "private lease" }] });
+  }) as typeof fetch);
+  assert.deepEqual(status.tasks, [{ status: "running" }]);
+  assert.equal(JSON.stringify(status).includes("private"), false);
+  await assert.rejects(readWorkerActivity("http://jarvis.example/"), /Invalid/);
+  await assert.rejects(readWorkerActivity("https://jarvis.example/", (async () => Response.json({ protocol: 2, workerOnline: true, tasks: [{status:"unknown"}] })) as typeof fetch), /Invalid/);
+  await assert.rejects(readWorkerActivity("https://jarvis.example/", (async () => new Response("offline", {status:503})) as typeof fetch), /503/);
+});
 const later = (ms: number) => new Date(clock.getTime() + ms);
 async function withDir(fn: (dir: string) => Promise<void>) {
   const dir = await mkdtemp(join(tmpdir(), "jarvis-pc-test-"));

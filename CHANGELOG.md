@@ -2,6 +2,12 @@
 
 ## 2026-10-16
 
+### Fix - Restart checks and desktop tool exposure
+
+- Restart status uses bounded Node HTTPS and validates active-task data before stopping anything. Normal certificate and task recovery protections remain enforced.
+- Replaced the empty Windows-MCP explicit filter with a verified exclusion filter exposing the intended 18 tools. Non-job reports explicitly reserve submission counts for job applications, and valid JSON result reports are validated alongside structured output.
+
+
 ### Feature - Requested browser actions and general Windows execution
 
 - Added browser execution and computer capabilities. Requested browser edits, messages, form work and calendar updates no longer use a forced read-only prompt. Windows-MCP provides app, screen/input, file and command tools to local Claude and Codex adapters.
