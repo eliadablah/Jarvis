@@ -2,6 +2,11 @@
 
 ## 2026-10-16
 
+### Change - PC worker takes any job-search errand
+
+- Chat now hands the PC worker requests to submit or finish prepared applications ("submit the Dexian application", "submit all drafts", "submit 4 and 5") and to update the tracker, not only "apply to jobs".
+- The worker reads the answer and story banks in `DAILY-JOB-RUN.md`, treats my Jarvis request as the approval that routine waits for, uses account-free company boards (Greenhouse, Lever, Ashby) as well as LinkedIn Easy Apply, skips on-site-only roles, and can read `Desktop\Resumes` (daily reports, tailored CVs).
+
 ### Change - Word-by-word spoken caption, voice at 1.75x
 
 - With voice on, the dashboard no longer opens the reply panel over the views. The sentence being spoken appears in a centered caption and each word lights up as it's said (browser word-boundary events, with a timing estimate for voices that don't send them). A pulse shows while Jarvis is thinking; the caption fades out after the reply, and click or Escape closes it. With voice off, the reply panel works as before.

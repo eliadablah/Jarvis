@@ -11,8 +11,8 @@ export async function* handOffJobErrand(dir: string, message: string, sessionId:
   yield {
     type: "text",
     text: online
-      ? "On it, sir. I've handed this to your PC: it will search LinkedIn, check each role against your profile, tailor your resume and cover letter, and apply in your Chrome (up to 10 per run). Ask me \"how did the job applying go?\" for the report."
-      : "Queued, sir. Your PC worker looks offline right now, so the job search and applications will start as soon as your PC is on and you're signed in. Ask me \"how did the job applying go?\" later for the report.",
+      ? "On it, sir. I've handed this to your PC. It's working in your Chrome now, using your profile, answer bank and tracker. Ask me \"how did the job applying go?\" for the report."
+      : "Queued, sir. Your PC worker looks offline right now, so this starts as soon as your PC is on and you're signed in. Ask me \"how did the job applying go?\" later for the report.",
   };
   yield { type: "done", sessionId: sessionId ?? randomUUID() };
 }
