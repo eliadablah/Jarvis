@@ -2,6 +2,14 @@
 
 ## 2026-10-15
 
+### Dashboard views and connected assistant
+
+- Added Evergreen A, orange Daylight B, and Mission Control C, with an automatic daily cycle and spoken view commands.
+- Tasks persist privately on the server and feed Jarvis's briefing. Typed and recognized speech share one command handler.
+- Auto routes between Claude and Codex using task suitability and observed provider limits; account reads use the connected Codex engine with explicit read-only Gmail/Calendar tools.
+- Added app installation metadata. Bank balances and triggering the PC job runner remain unconnected and are labeled clearly. See [dashboard guide](docs/dashboard.md).
+
+
 ### Codex chat and shared memory
 
 - The menu can switch between Claude and Codex, with separate conversation IDs. Codex receives bounded markdown excerpts from the same vault and has no command tools or connected apps.

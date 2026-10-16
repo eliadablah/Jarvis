@@ -7,6 +7,7 @@
 // and a mismatched Origin is refused outright.
 
 import type { IncomingMessage } from "node:http";
+import type { ChatProvider } from "../brain/events.ts";
 
 export const MAX_MESSAGE_CHARS = 8000;
 const MAX_BODY_BYTES = 32 * 1024;
@@ -17,7 +18,11 @@ export const CHAT_HEADER = "x-jarvis-chat";
 export interface ChatRequest {
   message: string;
   sessionId: string | undefined;
-  provider?: "claude" | "codex";
+  provider?: ChatProvider | "auto";
+  /** Provider session IDs must never be resumed with the other engine. */
+  sessions?: Partial<Record<ChatProvider, string>>;
+  /** Internal server reference data. Never parsed from the client body. */
+  serverContext?: string;
 }
 
 export class ChatRequestError extends Error {
@@ -73,9 +78,9 @@ export function parseChatRequest(body: string): ChatRequest {
     throw new ChatRequestError(400, "Body must be an object.");
   }
 
-  const { message, sessionId, provider } = data as Record<string, unknown>;
+  const { message, sessionId, provider, sessions } = data as Record<string, unknown>;
 
-  if (provider !== undefined && provider !== "claude" && provider !== "codex") throw new ChatRequestError(400, "Invalid chat engine.");
+  if (provider !== undefined && provider !== "auto" && provider !== "claude" && provider !== "codex") throw new ChatRequestError(400, "Invalid chat engine.");
   if (typeof message !== "string" || !message.trim()) {
     throw new ChatRequestError(400, "Message is required.");
   }
@@ -86,7 +91,24 @@ export function parseChatRequest(body: string): ChatRequest {
     if (typeof sessionId !== "string" || !isValidSessionId(sessionId)) {
       throw new ChatRequestError(400, "Invalid session ID.");
     }
+    if (provider === "auto") throw new ChatRequestError(400, "Use provider sessions with automatic routing.");
   }
 
-  return { message: message.trim(), sessionId: typeof sessionId === "string" ? sessionId : undefined, ...(provider ? {provider} : {}) };
+  let checkedSessions: Partial<Record<ChatProvider, string>> | undefined;
+  if (sessions !== undefined) {
+    if (typeof sessions !== "object" || sessions === null || Array.isArray(sessions)) {
+      throw new ChatRequestError(400, "Invalid provider sessions.");
+    }
+    checkedSessions = {};
+    for (const [engine, id] of Object.entries(sessions)) {
+      if (engine !== "claude" && engine !== "codex") throw new ChatRequestError(400, "Invalid provider session engine.");
+      if (id !== undefined && id !== null) {
+        if (typeof id !== "string" || !isValidSessionId(id)) throw new ChatRequestError(400, "Invalid provider session ID.");
+        checkedSessions[engine] = id;
+      }
+    }
+  }
+
+  return { message: message.trim(), sessionId: typeof sessionId === "string" ? sessionId : undefined,
+    ...(provider ? {provider} : {}), ...(checkedSessions ? {sessions: checkedSessions} : {}) };
 }

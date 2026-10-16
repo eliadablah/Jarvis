@@ -28,7 +28,7 @@ export interface AppConfig {
   codex?: CodexConfig;
 }
 
-export interface CodexConfig { enabled: boolean; bin: string; model: string; }
+export interface CodexConfig { enabled: boolean; bin: string; model: string; connectorsEnabled?: boolean; }
 
 const APP_ENVS: readonly AppEnv[] = ["local", "dev", "prod"];
 
@@ -50,7 +50,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
     env: parseEnv(source.APP_ENV),
     version: source.APP_VERSION?.trim() || "unknown",
     visualizerDir: source.VISUALIZER_DIR?.trim() || "visualizer",
-    codex: { enabled: source.CODEX_ENABLED === "true", bin: source.CODEX_BIN?.trim() || "codex", model: source.CODEX_MODEL?.trim() || "" },
+    codex: { connectorsEnabled: source.CODEX_CONNECTORS_ENABLED === "true", enabled: source.CODEX_ENABLED === "true", bin: source.CODEX_BIN?.trim() || "codex", model: source.CODEX_MODEL?.trim() || "" },
     claude: {
       bin: source.CLAUDE_BIN?.trim() || "claude",
       model: source.CLAUDE_MODEL?.trim() || "opus",

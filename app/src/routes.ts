@@ -3,6 +3,7 @@
 
 import type { AppConfig } from "./config.ts";
 import { content } from "./content.ts";
+import { renderDashboardPage } from './views/dashboardPage.ts';
 import { renderHomePage } from "./views/homePage.ts";
 
 export interface AppResponse {
@@ -27,8 +28,10 @@ export function handleRequest(method: string, path: string, config: AppConfig): 
   }
 
   if (path === "/") {
-    return { status: 200, contentType: "text/html; charset=utf-8", body: renderHomePage(config) };
+    return { status: 200, contentType: "text/html; charset=utf-8", body: renderDashboardPage(config) };
   }
+
+  if (path === '/face-mode') return { status: 200, contentType: 'text/html; charset=utf-8', body: renderHomePage(config) };
 
   return { status: 404, contentType: "text/plain; charset=utf-8", body: content.notFound };
 }

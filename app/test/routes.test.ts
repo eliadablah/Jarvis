@@ -20,17 +20,15 @@ test("health check reports ok with env and version", () => {
   assert.deepEqual(JSON.parse(res.body), { status: "ok", env: "dev", version: "abc1234" });
 });
 
-test("home page has the face, chat, and mic, with environment and version", () => {
+test("home page loads the dashboard with environment and version", () => {
   const res = handleRequest("GET", "/", config);
   assert.equal(res.status, 200);
   assert.match(res.contentType, /text\/html/);
-  assert.match(res.body, /Dev/);
+  assert.match(res.body, /data-env="dev"/);
   assert.match(res.body, /abc1234/);
-  assert.match(res.body, /<iframe id="face" src="\/face\/faces\/board\/"/);
-  assert.match(res.body, /id="chat-form"/);
-  assert.match(res.body, /id="mic"/);
-  assert.match(res.body, /src="\/main\.js"/);
-  assert.match(res.body, /AGPL-3\.0/);
+  assert.match(res.body, /src="\/dashboard\.js"/);
+  assert.match(res.body, /manifest\.webmanifest/);
+  assert.match(handleRequest("GET", "/face-mode", config).body, /AGPL-3\.0/);
 });
 
 test("unknown paths return 404", () => {

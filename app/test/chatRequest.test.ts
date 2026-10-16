@@ -59,3 +59,23 @@ test("rejects empty, missing, and oversized messages", () => {
   assertStatus(() => parseChatRequest("not json"), 400);
   assertStatus(() => parseChatRequest(JSON.stringify({ message: "x".repeat(MAX_MESSAGE_CHARS + 1) })), 413);
 });
+
+test("automatic routing accepts separate provider sessions", () => {
+  const sessions = { claude: "11111111-2222-3333-4444-555555555555", codex: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee" };
+  assert.deepEqual(parseChatRequest(JSON.stringify({message:"hello",provider:"auto",sessions})),
+    {message:"hello",provider:"auto",sessionId:undefined,sessions});
+});
+
+test("automatic routing refuses an ambiguous legacy session", () => {
+  assertStatus(() => parseChatRequest(JSON.stringify({message:"hello",provider:"auto",sessionId:"11111111-2222-3333-4444-555555555555"})), 400);
+});
+
+test("provider session validation rejects wrong shapes, unknown engines and injected flags", () => {
+  for (const sessions of [null, [], "--resume", {other:"11111111-2222-3333-4444-555555555555"}, {claude:"--last"}, {codex:23}]) {
+    assertStatus(() => parseChatRequest(JSON.stringify({message:"hello",provider:"auto",sessions})), 400);
+  }
+});
+
+test("empty provider sessions do not accidentally resume another engine", () => {
+  assert.deepEqual(parseChatRequest('{"message":"hello","provider":"auto","sessions":{"claude":null}}').sessions, {});
+});

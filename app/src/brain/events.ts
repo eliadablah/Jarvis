@@ -1,7 +1,9 @@
-// The small set of events the chat sends to the browser, one JSON object
-// per line. Kept separate so the server, the brain, and tests share it.
+// Events shared by the server, provider adapters, and browser.
+export type ChatProvider = "claude" | "codex";
+export type ChatFailureCode = "quota" | "authentication" | "unavailable";
 
 export type ChatEvent =
+  | { type: "engine"; provider: ChatProvider; reason: string }
   | { type: "text"; text: string }
-  | { type: "done"; sessionId: string }
-  | { type: "error"; message: string };
+  | { type: "done"; sessionId: string; provider?: ChatProvider }
+  | { type: "error"; message: string; code?: ChatFailureCode };

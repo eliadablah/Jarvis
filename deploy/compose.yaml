@@ -17,6 +17,8 @@ services:
       # Jarvis works inside my vault (read-only).
       JARVIS_WORKDIR: /home/node/vault
       CODEX_ENABLED: "true"
+      CODEX_CONNECTORS_ENABLED: "true"
+      JARVIS_DATA_DIR: /home/node/workspace/dashboard
       CODEX_HOME: /home/node/.codex
     # CLAUDE_CODE_OAUTH_TOKEN lives only in this file on the server.
     env_file: .env

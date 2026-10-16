@@ -18,6 +18,7 @@ const copy = (from, to) => {
 };
 
 copy("public/app.css", join(out, "app.css"));
+for (const file of ['dashboard.js','dashboard-live.css','viewSchedule.js','dashboard.css','dashboard-b.css','dashboard-c.css','manifest.webmanifest','jarvis-icon.svg','jarvis-192.png','jarvis-512.png']) copy('public/'+file, join(out,file));
 copy("node_modules/kokoro-js/dist/kokoro.web.js", join(voiceOut, "kokoro.web.js"));
 
 // Kokoro's browser build bundles ONNX Runtime; its WebAssembly files must

@@ -38,6 +38,10 @@ Nothing reaches prod without passing through dev first. Details in [docs/environ
 - **No secrets in git.** Real settings and tokens stay on the machine. This repo only has `.example` files with placeholders.
 - **Budget guardrail.** An AWS Budgets alert fires at $15/month.
 
+## Dashboard
+
+Three selectable views, a time-based Auto cycle, saved tasks, voice commands, and quota-aware Claude/Codex routing are available in dev. Gmail and Calendar reads use the connected Codex account. See [dashboard and installed app](docs/dashboard.md) for controls and current limits.
+
 ## Roadmap
 
 - [x] Run Jarvis locally (voice, face, memory)

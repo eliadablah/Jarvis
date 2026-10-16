@@ -12,11 +12,18 @@ import { FACE_PREFIX, serveFace } from "./face/visualizer.ts";
 import { servePublic } from "./http/publicFiles.ts";
 import { appHeaders } from "./http/securityHeaders.ts";
 
+import { handleDashboard } from './dashboard.ts';
+
 const config = loadConfig();
 
 const server = createServer((req, res) => {
   const path = new URL(req.url ?? "/", "http://localhost").pathname;
   const method = req.method ?? "GET";
+
+  if (path.startsWith('/api/dashboard')) {
+    handleDashboard(req, res, path, config).catch(() => { if (!res.headersSent) res.writeHead(500); res.end(); });
+    return;
+  }
 
   // --- Chat API ---
   if (path === "/api/chat" && method === "POST") {

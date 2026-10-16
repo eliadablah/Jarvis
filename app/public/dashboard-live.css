@@ -1,0 +1,57 @@
+/* Shared live interaction styles, after the three dashboard theme styles. */
+.reply-close { display: none; }
+.model-status { margin: 12px 0; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.model-status strong { display: block; margin: 7px 0; }
+.model-status p { margin: 5px 0; }
+@media (max-width: 1200px) {
+  body.reply-open .shell .companion {
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    inset: auto 16px 116px 16px;
+    width: auto;
+    height: auto;
+    min-height: 0;
+    max-height: 45vh;
+    max-height: 45dvh;
+    margin: 0;
+    padding: 16px;
+    overflow: auto;
+    z-index: 400;
+    border-radius: 16px;
+    box-shadow: 0 12px 50px #0007;
+    overscroll-behavior: contain;
+  }
+  body.reply-open .shell .companion > :not(.companion-top):not(#transcript) { display: none; }
+  body.reply-open .shell .companion .companion-top {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  body.reply-open .shell .companion .reply-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 32px;
+    margin-left: auto;
+    padding: 4px 8px;
+    color: inherit;
+    font-size: 13px;
+  }
+  body.reply-open .shell .companion #transcript {
+    display: block;
+    margin-top: 12px;
+    min-height: 0;
+    padding-top: 12px;
+    flex: 1;
+    overflow: visible;
+  }
+  body.reply-open .shell .companion #transcript .brief-line {
+    font-size: 14px;
+    line-height: 1.65;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+}

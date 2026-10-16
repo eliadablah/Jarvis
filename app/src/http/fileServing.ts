@@ -7,6 +7,8 @@ import { extname, resolve, sep } from "node:path";
 import type { ServerResponse } from "node:http";
 
 const CONTENT_TYPES: Record<string, string> = {
+  '.webmanifest': 'application/manifest+json',
+  '.svg': 'image/svg+xml',
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
   ".mjs": "text/javascript; charset=utf-8",
