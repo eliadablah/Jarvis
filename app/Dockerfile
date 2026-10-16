@@ -29,7 +29,9 @@ FROM node:24-bookworm-slim
 # Claude Code, pinned to the release Anthropic marks "stable". Upgrades are
 # a deliberate commit, never automatic inside a running container.
 ARG CLAUDE_CODE_VERSION=2.1.292
+ARG CODEX_VERSION=0.163.0
 RUN npm install -g --no-audit --no-fund "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" \
+  && npm install -g --no-audit --no-fund "@openai/codex@${CODEX_VERSION}" \
   && npm cache clean --force
 
 WORKDIR /app

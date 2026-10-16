@@ -25,7 +25,10 @@ export interface AppConfig {
   /** Folder holding the ai-visualizer files (core.js, faces/, assets/). */
   visualizerDir: string;
   claude: ClaudeConfig;
+  codex?: CodexConfig;
 }
+
+export interface CodexConfig { enabled: boolean; bin: string; model: string; }
 
 const APP_ENVS: readonly AppEnv[] = ["local", "dev", "prod"];
 
@@ -47,6 +50,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
     env: parseEnv(source.APP_ENV),
     version: source.APP_VERSION?.trim() || "unknown",
     visualizerDir: source.VISUALIZER_DIR?.trim() || "visualizer",
+    codex: { enabled: source.CODEX_ENABLED === "true", bin: source.CODEX_BIN?.trim() || "codex", model: source.CODEX_MODEL?.trim() || "" },
     claude: {
       bin: source.CLAUDE_BIN?.trim() || "claude",
       model: source.CLAUDE_MODEL?.trim() || "opus",

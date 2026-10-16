@@ -13,11 +13,12 @@ export async function streamChat(
   message: string,
   sessionId: string | undefined,
   onText: (text: string) => void,
+  provider: "claude" | "codex" = "claude",
 ): Promise<string | undefined> {
   const res = await fetch("/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json", "X-Jarvis-Chat": "1" },
-    body: JSON.stringify({ message, sessionId }),
+    body: JSON.stringify({ message, sessionId, provider }),
   });
 
   if (!res.ok || !res.body) {

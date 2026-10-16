@@ -16,6 +16,8 @@ services:
       APP_ENV: ${APP_ENV:?APP_ENV is required}
       # Jarvis works inside my vault (read-only).
       JARVIS_WORKDIR: /home/node/vault
+      CODEX_ENABLED: "true"
+      CODEX_HOME: /home/node/.codex
     # CLAUDE_CODE_OAUTH_TOKEN lives only in this file on the server.
     env_file: .env
     expose:

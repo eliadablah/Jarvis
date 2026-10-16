@@ -22,6 +22,7 @@ const status = $("status");
 const chat = $("chat");
 const face = $<HTMLIFrameElement>("face");
 const faceSelect = $<HTMLSelectElement>("face-select");
+const engineSelect = $<HTMLSelectElement>("engine-select");
 const voiceToggle = $<HTMLButtonElement>("voice-toggle");
 const newChat = $<HTMLButtonElement>("new-chat");
 const toggleChat = $<HTMLButtonElement>("toggle-chat");
@@ -44,7 +45,11 @@ function save(key: string, value: string | undefined): void {
   }
 }
 
-let sessionId = load("jarvis.sessionId");
+let provider: "claude" | "codex" = "claude";
+if (load("jarvis.engine") === "codex" && !engineSelect.options[1]?.disabled) provider = "codex";
+engineSelect.value = provider;
+const sessionKey = () => provider === "claude" ? "jarvis.sessionId" : "jarvis.sessionId.codex";
+let sessionId = load(sessionKey());
 let busy = false;
 
 // --- Status line ---
@@ -91,6 +96,7 @@ function setBusy(value: boolean): void {
   busy = value;
   send.disabled = value;
   newChat.disabled = value;
+  engineSelect.disabled = value;
 }
 
 /** Back to idle once both the answer and the speech are finished. */
@@ -123,8 +129,8 @@ async function ask(message: string): Promise<void> {
       reply.textContent = received;
       messages.scrollTop = messages.scrollHeight;
       speakSentences(splitter.push(piece));
-    });
-    save("jarvis.sessionId", sessionId);
+    }, provider);
+    save(sessionKey(), sessionId);
     speakSentences(splitter.flush());
     if (!received) reply.remove();
   } catch (err) {
@@ -224,7 +230,7 @@ voiceToggle.addEventListener("click", () => {
 
 newChat.addEventListener("click", () => {
   sessionId = undefined;
-  save("jarvis.sessionId", undefined);
+  save(sessionKey(), undefined);
   voice.stop();
   messages.replaceChildren();
   const empty = document.createElement("p");
@@ -238,6 +244,18 @@ newChat.addEventListener("click", () => {
 toggleChat.addEventListener("click", () => {
   const hidden = chat.classList.toggle("hidden");
   toggleChat.textContent = hidden ? (text.showChat ?? "") : (text.hideChat ?? "");
+});
+
+engineSelect.addEventListener("change", () => {
+  if (busy) return;
+  provider = engineSelect.value === "codex" ? "codex" : "claude";
+  save("jarvis.engine", provider);
+  sessionId = load(sessionKey());
+  voice.stop();
+  messages.replaceChildren();
+  setState("idle");
+  showStatus();
+  input.focus();
 });
 
 // Space (outside the text box) starts the board's cinematic flythrough,

@@ -17,6 +17,7 @@ export const CHAT_HEADER = "x-jarvis-chat";
 export interface ChatRequest {
   message: string;
   sessionId: string | undefined;
+  provider?: "claude" | "codex";
 }
 
 export class ChatRequestError extends Error {
@@ -72,8 +73,9 @@ export function parseChatRequest(body: string): ChatRequest {
     throw new ChatRequestError(400, "Body must be an object.");
   }
 
-  const { message, sessionId } = data as Record<string, unknown>;
+  const { message, sessionId, provider } = data as Record<string, unknown>;
 
+  if (provider !== undefined && provider !== "claude" && provider !== "codex") throw new ChatRequestError(400, "Invalid chat engine.");
   if (typeof message !== "string" || !message.trim()) {
     throw new ChatRequestError(400, "Message is required.");
   }
@@ -86,5 +88,5 @@ export function parseChatRequest(body: string): ChatRequest {
     }
   }
 
-  return { message: message.trim(), sessionId: typeof sessionId === "string" ? sessionId : undefined };
+  return { message: message.trim(), sessionId: typeof sessionId === "string" ? sessionId : undefined, ...(provider ? {provider} : {}) };
 }

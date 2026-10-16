@@ -67,6 +67,12 @@ export function renderHomePage(config: AppConfig): string {
           <label>${escapeHtml(content.faceLabel)}
             <select id="face-select">${faceOptions}</select>
           </label>
+          <label>${escapeHtml(content.engineLabel)}
+            <select id="engine-select">
+              <option value="claude">${escapeHtml(content.claudeLabel)}</option>
+              <option value="codex"${config.codex?.enabled ? "" : " disabled"}>${escapeHtml(content.codexLabel)}</option>
+            </select>
+          </label>
           <button type="button" id="voice-toggle">${escapeHtml(content.voiceOnLabel)}</button>
           <button type="button" id="new-chat">${escapeHtml(content.newChatLabel)}</button>
           <p class="meta">${envLabel} · ${escapeHtml(content.versionLabel)} ${version}</p>

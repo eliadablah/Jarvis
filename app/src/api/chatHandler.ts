@@ -4,6 +4,7 @@
 
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { AppConfig } from "../config.ts";
+import { askCodex } from "../brain/codex.ts";
 import { askClaude } from "../brain/claudeCode.ts";
 import type { ChatEvent } from "../brain/events.ts";
 import { ChatRequestError, checkRequestSource, parseChatRequest, readBody } from "./chatRequest.ts";
@@ -27,6 +28,7 @@ export async function handleChat(req: IncomingMessage, res: ServerResponse, conf
     throw err;
   }
 
+  if (chat.provider === "codex" && !config.codex?.enabled) return sendError(res, 503, "Codex is not connected yet. Select Claude.");
   if (busy) return sendError(res, 429, "Jarvis is still answering. Try again in a moment.");
   busy = true;
 
@@ -43,7 +45,10 @@ export async function handleChat(req: IncomingMessage, res: ServerResponse, conf
   const send = (event: ChatEvent) => res.write(`${JSON.stringify(event)}\n`);
 
   try {
-    for await (const event of askClaude(config.claude, chat.message, chat.sessionId, abort.signal)) {
+    const answer = chat.provider === "codex" && config.codex
+      ? askCodex(config.codex, config.claude, chat.message, chat.sessionId, abort.signal)
+      : askClaude(config.claude, chat.message, chat.sessionId, abort.signal);
+    for await (const event of answer) {
       send(event);
     }
   } catch (err) {
