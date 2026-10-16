@@ -2,6 +2,10 @@
 
 ## 2026-10-16
 
+### Change - Faster voice replies
+
+- Spoken replies play at 2.5x: Kokoro's own `speed` setting (keeps the pitch natural), the face-mode browser fallback voice, and the dashboard voice.
+
 ### Fix - Job requests go to Claude
 
 - Auto sent "apply to jobs for me" to Codex as everyday assistance. Job search, applications, resumes, cover letters, interviews, and LinkedIn questions now go to Claude.

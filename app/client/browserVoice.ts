@@ -30,7 +30,8 @@ export function speakWithBrowser(text: string): Promise<void> {
     const voice = pickVoice();
     if (voice) utterance.voice = voice;
     utterance.lang = voice?.lang ?? "en-GB";
-    utterance.rate = 1.02;
+    // 2.5x, matching Kokoro's speed in worker/ttsWorker.ts.
+    utterance.rate = 2.5;
 
     // Speech-like motion for the face while the browser talks.
     let speaking = true;

@@ -21,6 +21,8 @@ const KOKORO_URL: string = "/voice/kokoro.web.js";
 
 const MODEL_ID = "onnx-community/Kokoro-82M-v1.0-ONNX";
 const VOICE = "bm_lewis";
+/** Eli likes replies fast; Kokoro's own speed keeps the pitch natural. Same as browserVoice.ts. */
+const SPEED = 2.5;
 
 let tts: KokoroTTS | undefined;
 let loading: Promise<KokoroTTS> | undefined;
@@ -64,7 +66,7 @@ self.onmessage = (event: MessageEvent<{ type: "load" } | { type: "speak"; id: nu
     try {
       const model = await load();
       const started = performance.now();
-      const audio = await model.generate(msg.text, { voice: VOICE });
+      const audio = await model.generate(msg.text, { voice: VOICE, speed: SPEED });
       const samples = audio.audio;
       const ms = performance.now() - started;
       postMessage({ type: "audio", id: msg.id, samples, rate: audio.sampling_rate, ms }, [samples.buffer]);
