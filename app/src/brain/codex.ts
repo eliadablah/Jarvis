@@ -7,7 +7,7 @@ import type { ChatEvent } from "./events.ts";
 import { splitLines } from "./streamParser.ts";
 
 export function buildCodexArgs(config: CodexConfig, sessionId?: string): string[] {
-  const args = ["exec", "--ignore-user-config", "-c", 'approval_policy="never"',
+  const args = ["exec", "--ignore-user-config", "--disable", "apps", "--disable", "browser_use", "--disable", "computer_use", "--disable", "view_image", "-c", 'approval_policy="never"',
     "-c", 'sandbox_mode="read-only"', "-c", "features.shell_tool=false",
     "-c", "features.unified_exec=false", "-c", 'web_search="disabled"', "--skip-git-repo-check", "--json"];
   if (config.model) args.push("--model", config.model);
@@ -90,7 +90,7 @@ export async function* askCodex(config: CodexConfig, memory: ClaudeConfig, messa
         else if (event?.type === "item.completed" && event.item?.type === "agent_message" && event.item.text)
           yield {type:"text", text:event.item.text};
         else if (event?.type === "turn.completed") completed=true;
-        else if (event?.type === "turn.failed" || event?.type === "error") failed=true;
+        else if (event?.type === "turn.failed") failed=true;
       }
     }
     const code=await exited;

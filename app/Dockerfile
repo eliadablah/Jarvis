@@ -30,6 +30,7 @@ FROM node:24-bookworm-slim
 # a deliberate commit, never automatic inside a running container.
 ARG CLAUDE_CODE_VERSION=2.1.292
 ARG CODEX_VERSION=0.163.0
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
 RUN npm install -g --no-audit --no-fund "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" \
   && npm install -g --no-audit --no-fund "@openai/codex@${CODEX_VERSION}" \
   && npm cache clean --force
@@ -41,6 +42,7 @@ ENV NODE_ENV=production \
     JARVIS_PERSONA_PATH=/app/persona/jarvis.md \
     JARVIS_WORKDIR=/home/node/workspace \
     CLAUDE_CONFIG_DIR=/home/node/.claude \
+    CODEX_CA_CERTIFICATE=/etc/ssl/certs/ca-certificates.crt \
     DISABLE_AUTOUPDATER=1 \
     DISABLE_TELEMETRY=1 \
     DISABLE_ERROR_REPORTING=1 \
