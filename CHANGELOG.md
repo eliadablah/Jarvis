@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-16
+
+### Fix - Job requests go to Claude
+
+- Auto sent "apply to jobs for me" to Codex as everyday assistance. Job search, applications, resumes, cover letters, interviews, and LinkedIn questions now go to Claude.
+
 ## 2026-10-15
 
 ### Fix - Gemini retries on a backup model when Google is busy

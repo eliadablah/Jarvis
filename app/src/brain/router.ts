@@ -46,6 +46,9 @@ export function classifyProviderFailure(message: string): ChatFailureCode {
 /** A transparent task preference, with live refusal state checked separately. */
 export function preferredProvider(message: string): { provider: ChatProvider; reason: string } {
   if (requiresAccountAccess(message)) return { provider: "codex", reason: "Codex selected for connected account reads." };
+  if (/\b(jobs?|apply|applying|application|resume|cv|cover letter|interview|linkedin|career|hiring)\b/i.test(message)) {
+    return { provider: "claude", reason: "Claude selected for job search and applications." };
+  }
   if (/\b(code|coding|debug|typescript|javascript|python|repository|repo|deploy|terraform|docker|api|implement|refactor|tests?)\b/i.test(message)) {
     return { provider: "codex", reason: "Codex selected for technical work." };
   }

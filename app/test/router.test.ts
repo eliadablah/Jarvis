@@ -26,6 +26,8 @@ test("task preference routes technical work to Codex and writing to Claude", () 
   assert.equal(preferredProvider("Summarize my notes").provider, "claude");
   assert.equal(preferredProvider("Summarize my inbox").provider, "codex");
   assert.equal(preferredProvider("Hello").provider, "codex");
+  assert.equal(preferredProvider("Apply to some DevOps jobs for me").provider, "claude");
+  assert.equal(preferredProvider("Tailor my resume for this posting").provider, "claude");
 });
 
 test("automatic quota fallback is announced and resumes only the matching provider session", async () => {
