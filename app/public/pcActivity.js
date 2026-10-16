@@ -28,7 +28,7 @@ export function mountPcActivity({ api, safe, modal, toast, navigate }) {
       const html = state.tasks.length ? state.tasks.slice(0, 12).map(task =>
         '<article class="pc-task" data-status="' + safe(task.status) + '"><div class="pc-task-top"><span class="tag">' + safe(labels[task.status] || task.status) +
         '</span><small>' + safe(task.executor || task.plan?.kind || 'PC') + '</small></div><h3>' + safe(task.request) + '</h3><p>' +
-        safe(task.progress || task.result || 'Waiting for a capable local agent.') + '</p><div class="pc-task-actions"><button class="text-btn" data-pc-report="' +
+        safe((task.progress || task.result || 'Waiting for a capable local agent.').slice(0,220)) + '</p><div class="pc-task-actions"><button class="text-btn" data-pc-report="' +
         safe(task.id) + '">Details</button>' + (['queued','running'].includes(task.status) ? '<button class="text-btn" data-pc-cancel="' +
         safe(task.id) + '">Cancel task</button>' : '') + '</div></article>').join('') :
         '<div class="pc-empty"><strong>Start with a clear request.</strong><p>“Find support jobs, but do not apply.”<br>“In my assistant workspace, create a budget template.”<br>“Open Calculator.”</p></div>';

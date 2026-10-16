@@ -10,7 +10,7 @@ import { validateReport, emptyReport, type PcPlan, type ExecutorStatus } from ".
 import { enqueuePcTask, claimNextPcTask, heartbeatPcTask, finishPcTask, cancelPcTask, pcSnapshot, readPcTasks, publicTask, workerOnline } from "../app/src/pcTasks/store.ts";
 import { handlePcTasks } from "../app/src/pcTasks/api.ts";
 import { loadConfig } from "../app/src/config.ts";
-import { agentStatuses, chooseAgents, canFallback, jobPrompt, codexArgs, claudeArgs } from "./agents.ts";
+import { agentStatuses, chooseAgents, canFallback, reportedRun, refusal, jobPrompt, codexArgs, claudeArgs } from "./agents.ts";
 import { readState, saveState, acquireWorkerLock } from "./persistence.ts";
 import { validateClaim, deliverReport } from "./worker.ts";
 const agents: ExecutorStatus[] = [{ id: "claude-chrome", capabilities: ["jobs", "browser"], state: "ready", reason: "", remainingTokens: null }];
@@ -154,3 +154,21 @@ test("HTTP rejects old workers, wrong tokens, cross-origin cancel and lease thef
     if (saved === undefined) delete process.env.JARVIS_DATA_DIR; else process.env.JARVIS_DATA_DIR = saved;
   }
 }));
+
+test("spoken counts and natural prefixes never broaden the submission cap", () => {
+  assert.deepEqual(plan("Go and apply to three support jobs"), {kind:"jobs",action:"submit",maxApplications:3});
+  assert.equal(parsePcIntent("Apply to zero jobs")?.type, "clarify");
+  assert.equal(parsePcIntent("Apply to jobs without submitting")?.type, "clarify");
+});
+test("timestamps do not impersonate HTTP quota failures", () => {
+  assert.equal(refusal("21:18:07.429880Z workspace routing discovery failed"), "unavailable");
+  assert.equal(refusal("HTTP 429 Too Many Requests"), "quota");
+  assert.equal(refusal("status: 401"), "authentication");
+});
+
+test("a valid no-tool permission refusal falls back, but a possibly acted-on run does not", () => {
+  const scope=plan("In my assistant workspace, create a note");
+  const refused=emptyReport("needs_input","This session has read-only permissions.");
+  assert.equal(canFallback(reportedRun(refused,scope,false)),true);
+  assert.equal(canFallback(reportedRun(refused,scope,true)),false);
+});

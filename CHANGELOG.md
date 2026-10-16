@@ -2,7 +2,10 @@
 
 ## 2026-10-16
 
-### Feature - Scoped PC tasks, protocol 2 (built with Codex)
+### Feature - Scoped PC tasks, protocol 2
+
+- Standalone Codex runtime and trusted CA bundle avoid desktop-runtime and certificate conflicts. Permission refusals before any tool use can fall back to the next capable agent. Worker updates include an idle-only restart helper; managed permission profiles remain enforced.
+- Natural voice prefixes and spoken application counts retain the requested cap. Timestamp digits cannot be mistaken for HTTP usage limits. Activity previews stay concise; full reports remain under Details.
 
 - PC requests now parse into a fixed plan before anything is queued: job search / prepare / submit (with a submission cap) / tracker, browser read-and-navigate ("in my Chrome, find ..."), work inside a named approved workspace ("in my assistant workspace, ..."), or opening Calculator, Notepad or File Explorer. Questions, negations, and requests to bypass permissions never execute.
 - The worker picks a capable local agent (Codex for workspace files, Claude with Chrome for jobs and browsing, Windows for app launch) and falls back only if one refuses before using any tools. Claude runs restricted (no Bash, skills or sub-agents) with a JSON report schema.

@@ -31,16 +31,21 @@ export function chooseAgents(plan: PcPlan, statuses: ExecutorStatus[]): string[]
   return statuses.filter(e => e.state === "ready" && e.capabilities.includes(capabilityFor(plan))).map(e => e.id);
 }
 export function refusal(text: string): AgentRun["failure"] {
-  if (/quota|rate.?limit|usage.?limit|insufficient_quota|too many requests|429|hit your.{0,12}limit/i.test(text)) return "quota";
-  if (/unauthori[sz]ed|authenticat|sign.?in|log.?in|invalid.{0,12}(token|credential)|401|403/i.test(text)) return "authentication";
-  if (/failed to initialize|could not start|spawn EPERM|Access is denied|unable to open database/i.test(text)) return "unavailable";
+  if (/quota|rate.?limit|usage.?limit|insufficient_quota|too many requests|(?:HTTP|status|code|response)\W{0,8}429\b|hit your.{0,12}limit/i.test(text)) return "quota";
+  if (/unauthori[sz]ed|authenticat|sign.?in|log.?in|invalid.{0,12}(token|credential)|(?:HTTP|status|code|response)\W{0,8}(?:401|403)\b/i.test(text)) return "authentication";
+  if (/failed to initialize|could not start|spawn EPERM|Access is denied|unable to open database|workspace routing discovery failed/i.test(text)) return "unavailable";
   return;
 }
 export function canFallback(run: AgentRun): boolean { return Boolean(run.failure && run.safeToRetry); }
+export function reportedRun(value: unknown, plan: PcPlan, touchedTools: boolean): AgentRun {
+  const report = validateReport(value, plan);
+  const unavailable = report.outcome === "needs_input" && !touchedTools;
+  return { report, ...(unavailable ? { failure: "unavailable" as const } : {}), safeToRetry: unavailable };
+}
 const schemaPath = fileURLToPath(new URL("./report.schema.json", import.meta.url));
 export function codexArgs(): string[] {
-  return ["exec", "--ignore-user-config", "--disable", "browser_use", "--disable", "computer_use",
-    "-c", 'approval_policy="never"', "-c", 'sandbox_mode="workspace-write"', "-c", 'web_search="disabled"',
+  return ["exec", "--ignore-user-config", "--disable", "apps", "--disable", "browser_use", "--disable", "computer_use",
+    "-c", 'approval_policy="never"', "-c", 'sandbox_mode="workspace-write"', "--sandbox", "workspace-write", "-c", 'web_search="disabled"',
     "--skip-git-repo-check", "--json", "--output-schema", schemaPath, "-"];
 }
 export function claudeArgs(plan: PcPlan): string[] {
@@ -141,7 +146,7 @@ export async function runAgent(id: string, settings: WorkerSettings, task: Claim
     try {
       child = spawn(bin, id === "codex-local" ? codexArgs() : claudeArgs(plan), {
         cwd, windowsHide: true, detached: process.platform !== "win32", stdio: [input.fd, output.fd, errors.fd],
-        env: { ...process.env, CLAUDE_CODE_OAUTH_TOKEN: undefined, PC_WORKER_TOKEN: undefined, ...(id === "codex-local" && settings.codexHome ? { CODEX_HOME: settings.codexHome } : {}) },
+        env: { ...process.env, CLAUDE_CODE_OAUTH_TOKEN: undefined, PC_WORKER_TOKEN: undefined, ...(id === "codex-local" && settings.codexHome ? { CODEX_HOME: settings.codexHome, CODEX_CA_CERTIFICATE: join(settings.codexHome, "ca-bundle.pem") } : {}) },
       });
     } catch {
       void dispose().finally(() => resolve({ report: emptyReport("needs_input", "Windows could not start " + id + "."), failure: "unavailable", safeToRetry: true }));
@@ -162,7 +167,7 @@ export async function runAgent(id: string, settings: WorkerSettings, task: Claim
     function event(line: string) {
       let e; try { e = JSON.parse(line); } catch { return; }
       const tool = e.type === "assistant" && e.message?.content?.some((c: {type: string}) => c.type === "tool_use") ||
-        (e.type === "item.started" || e.type === "item.completed") && !["agent_message", "reasoning"].includes(e.item?.type);
+        (e.type === "item.started" || e.type === "item.completed") && !["agent_message", "reasoning", "error"].includes(e.item?.type);
       if (tool) { touchedTools = true; progress(id + " is using its tools."); }
       if (e.type === "result") { candidate = e.structured_output; completed = !e.is_error; diagnostics += " " + String(e.result ?? ""); }
       if (e.type === "item.completed" && e.item?.type === "agent_message") { try { candidate = JSON.parse(e.item.text); } catch {} }
@@ -205,7 +210,7 @@ export async function runAgent(id: string, settings: WorkerSettings, task: Claim
         if (signal.aborted || killTimer) return resolve({ report: emptyReport(signal.aborted ? "cancelled" : "needs_input",
           "Agent stopped. Some actions may already have happened; inspect the workspace or browser before retrying."), safeToRetry: false });
         if (child.exitCode === 0 && completed) {
-          try { return resolve({ report: validateReport(candidate, plan), safeToRetry: false }); } catch {}
+          try { return resolve(reportedRun(candidate, plan, touchedTools)); } catch {}
         }
         diagnostic?.(diagnostics);
         const failure = refusal(diagnostics);

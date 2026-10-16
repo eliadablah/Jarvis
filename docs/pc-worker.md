@@ -1,44 +1,61 @@
-# PC worker: job applying
+# PC tasks and local agents
 
-Jarvis's server can't use my browser, so errands that need it go to a small
-worker on my Windows PC. Today that's one errand: finding and applying to jobs.
+Jarvis sends explicit PC requests to an authenticated Windows worker. The PC must be awake and signed in. The web server never receives desktop or shell tools.
 
-## How it works
+## Requests
 
-1. I tell Jarvis something like "apply to DevOps jobs". The server queues the
-   errand (`/api/pc/tasks`) and replies right away.
-2. The worker (`pc-worker/worker.ts`) checks the queue every 30 seconds over
-   Tailscale, using its own token.
-3. It runs Claude Code headless with Chrome control (`claude -p --chrome`)
-   inside my [ai-job-search](https://github.com/MadsLorentzen/ai-job-search)
-   workspace (MIT). It searches LinkedIn (DFW and Remote, last 7 days), checks
-   fit against my profile, tailors the CV following my resume rules, and
-   submits LinkedIn Easy Apply applications in my signed-in Chrome, up to 10
-   per run.
-4. It posts a report back. "How did the job applying go?" reads it out.
+| Example | What can execute |
+|---|---|
+| Find support jobs but do not apply | Search only; no submissions |
+| Prepare job applications for Acme | Local drafts; no submissions |
+| Apply to three support jobs | Up to three submissions, within the local configured cap |
+| Submit my prepared job applications for Acme | Only the named applications |
+| Update my job tracker | Local tracker changes |
+| In my Chrome, find the AWS documentation | Read and navigate in Chrome |
+| In my assistant workspace, create a budget template | Files in that approved workspace |
+| In my jarvis project, review the task router | The configured Jarvis project |
+| Open Calculator / Notepad / File Explorer | Fixed Windows launcher, no model cost |
+| Show PC activity | Open the activity panel |
+| Cancel my PC task | Cancel the single active/queued task; use its button when several exist |
 
-## Guardrails
+Vague requests to submit drafts ask which drafts. Discussion, status questions and negations do not execute. Unsupported Windows GUI operations need an additional adapter; the worker does not pretend it can click arbitrary apps.
 
-- Uses my existing Chrome sign-in. No LinkedIn password is stored anywhere.
-- Stops a job and lists it under "Needs Eli" on a CAPTCHA, login, security
-  check, external company site, or a question it can't answer truthfully from
-  my profile.
-- Job postings are treated as untrusted data; it never messages recruiters,
-  changes my profile, or pays for anything.
-- Every submitted application is logged in the workspace at
-  `documents/applications/log.md`.
-- My PC has to be on. Errands wait in the queue until it is.
+## Agent choice
 
-LinkedIn's terms don't allow automated applying; I've accepted that risk for
-my own account.
+- Codex is preferred for approved local workspaces. It runs with workspace-write sandboxing and no approvals, with account apps and browser/desktop tools disabled.
+- Claude provides file-only fallback in restricted mode. It cannot run commands or load skills in this adapter.
+- Claude with Chrome handles browser and job tasks. Its login and Chrome extension must be connected. Search, prepare and submit are separate task scopes. Profile and answer-bank files are preloaded with content hashes.
+- Windows directly launches the three supported apps.
+- Numeric remaining tokens are unknown. Observed usage limits pause an agent for fifteen minutes; startup/auth failures pause it for one minute. Fallback happens only before any tools run. Nothing is retried automatically after a possible side effect.
 
-## Install (once)
+## Results and recovery
 
-```powershell
-powershell -ExecutionPolicy Bypass -File pc-worker\install.ps1
-```
+The activity panel shows queued, running, stopping, completed, partly completed, needs-you and connection-lost states. Reports include agent-provided evidence and questions. A successful process exit does not mean the requested work succeeded. Application counts must match distinct confirmation URLs and the authorized cap. Zero confirmed submissions cannot be completed.
 
-It creates the worker token, saves it in `%USERPROFILE%\.jarvis\pc-worker.json`
-(readable only by me) and as the GitHub secret `PC_WORKER_TOKEN`, and starts
-the worker hidden at every sign-in. Redeploy dev afterwards so the server gets
-the token. The log is `%USERPROFILE%\.jarvis\pc-worker.log`.
+Workers heartbeat while running. Each task has an owner and secret claim lease; only that owner can report. Results are saved locally before delivery and retry idempotently after a connection failure. The worker never automatically repeats an interrupted action. Cancel asks the PC to stop its process tree; actions already performed remain.
+
+A loopback port lock allows one protocol-2 worker per PC. Protocol-1 workers cannot claim new tasks. Old unscoped tasks need a new explicit request. An interrupted run with uncertain child processes puts the worker into a recovery hold. Review the application/files and stop any leftover agents before clearing recoveryHold in the local state file and restarting. Never simply requeue a task whose real outcome is unknown.
+
+## Setup
+
+Run from the repository:
+
+    powershell -ExecutionPolicy Bypass -File pc-worker\install.ps1
+
+Settings are private in %USERPROFILE%\.jarvis\pc-worker.json. Existing tokens and workspace aliases are preserved; only initial installation or explicit -RotateToken changes the token and requires redeploying the server. Approved workspace aliases map to absolute local paths. The assistant workspace defaults to %USERPROFILE%\.jarvis\workspace.
+
+The installer sets up a pinned standalone official Codex CLI and a trusted CA bundle. Restart an idle worker after an update from a normal PowerShell window:
+
+    powershell -ExecutionPolicy Bypass -File pc-worker/restart.ps1
+
+A worker started inside another coding agent can inherit that agent’s read-only permission profile. Restarting from normal PowerShell or the registered logon task starts the worker with its configured workspace permissions. Never remove a managed permission profile inside a restricted session.
+
+Use a standalone official Codex CLI for unattended work rather than the desktop app bundled alpha binary. Keep its auth/runtime cache separate in %USERPROFILE%\.jarvis\codex; authenticate that cache with the official Codex login flow. Credentials, settings, reports and caches never belong in the repository.
+
+The worker uses private temporary files for agent stdin/stdout to avoid named-pipe EPERM failures seen on Windows. Temporary prompt/output files are removed after a confirmed exit. Its state/outbox and log stay in %USERPROFILE%\.jarvis.
+
+## Checks
+
+From app/: npm run typecheck, npm test, npm run test:pc, npm run build. CI runs both server and worker checks. The Linux image contains server code only; the worker runs on Windows.
+
+No automatic job submissions, real emails, purchases or account changes are part of the integration smoke tests.

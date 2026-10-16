@@ -29,8 +29,20 @@ if (-not $settings.server -or $PSBoundParameters.ContainsKey("Server")) { $setti
 if (-not $settings.jobsDir -or $PSBoundParameters.ContainsKey("JobsDir")) { $settings.jobsDir = $JobsDir }
 if (-not $settings.maxApplications -or $PSBoundParameters.ContainsKey("MaxApplications")) { $settings.maxApplications = [Math]::Min(25, [Math]::Max(1, $MaxApplications)) }
 $settings.claudeBin = (Get-Command claude).Source
-$codex = Get-Command codex -ErrorAction SilentlyContinue
-if ($codex) { $settings.codexBin = $codex.Source }
+$settings.needsTokenSync = $newToken -or $settings.needsTokenSync -eq $true
+[IO.File]::WriteAllText($settingsPath, ($settings | ConvertTo-Json -Depth 8), (New-Object Text.UTF8Encoding($false)))
+if ($settings.needsTokenSync) {
+  $settings.token | gh secret set PC_WORKER_TOKEN --repo eliadablah/Jarvis
+  if ($LASTEXITCODE -ne 0) { throw "Could not save the GitHub secret; rerun setup to retry the same token." }
+  $settings.needsTokenSync = $false
+}
+# Install/use the pinned official CLI and a separate private runtime cache.
+$codexSetup = Join-Path $PSScriptRoot "setup-codex.ts"
+node $codexSetup
+if ($LASTEXITCODE -ne 0) { throw "Could not set up standalone Codex." }
+$codexSettings = Get-Content -LiteralPath $settingsPath -Raw | ConvertFrom-Json
+$settings.codexBin = $codexSettings.codexBin
+$settings.codexHome = $codexSettings.codexHome
 if (-not $settings.workspaces) {
   $assistant = Join-Path $dir "workspace"
   New-Item -ItemType Directory -Force $assistant | Out-Null
@@ -39,10 +51,7 @@ if (-not $settings.workspaces) {
 [IO.File]::WriteAllText($settingsPath, ($settings | ConvertTo-Json -Depth 8), (New-Object Text.UTF8Encoding($false)))
 icacls $settingsPath /inheritance:r /grant:r ($env:USERNAME + ':(R,W)') | Out-Null
 if ($LASTEXITCODE -ne 0) { throw "Could not restrict the settings file." }
-if ($newToken) {
-  $settings.token | gh secret set PC_WORKER_TOKEN --repo eliadablah/Jarvis
-  if ($LASTEXITCODE -ne 0) { throw "Could not save the GitHub secret." }
-}
+
 $worker = Join-Path $PSScriptRoot "worker.ts"
 $node = (Get-Command node).Source
 $action = New-ScheduledTaskAction -Execute "conhost.exe" -Argument ('--headless "{0}" "{1}"' -f $node,$worker) -WorkingDirectory (Split-Path $PSScriptRoot)

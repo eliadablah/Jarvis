@@ -37,7 +37,7 @@ export async function handlePcTasks(req: IncomingMessage, res: ServerResponse, p
   try {
     if (path === "/api/pc/tasks" && (method === "GET" || method === "HEAD")) {
       const state = await pcSnapshot(dir);
-      json(res, 200, { protocol: PC_PROTOCOL, enabled: Boolean(config.pcWorkerToken), workerOnline: workerOnline(state),
+      json(res, 200, { protocol: PC_PROTOCOL, enabled: Boolean(config.pcWorkerToken), workerOnline: workerOnline(state), workerSeenAt: state.workerSeenAt,
         executors: state.executors ?? [], tasks: state.tasks.slice(-100).reverse().map(publicTask) }); return;
     }
     if (method !== "POST") { json(res, 405, { error: "Method not allowed" }); return; }

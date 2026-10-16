@@ -3,7 +3,8 @@ export type PcIntent = { type: "task"; plan: PcPlan } | { type: "clarify"; messa
 /** Narrow action grammar: discussion, quoted commands and vague drafts never execute. */
 export function parsePcIntent(message: string): PcIntent | undefined {
   const text = message.trim().replace(/[’]/g, "'").replace(/^(?:hey\s+)?jarvis[,!:\s]+/i, "")
-    .replace(/^(?:please\s+)?(?:(?:can|could|would) you\s+|i want you to\s+)?(?:please\s+)?/i, "");
+    .replace(/^(?:please\s+)?(?:(?:can|could|would) you\s+|i (?:want|need) you to\s+)?(?:please\s+)?/i, "")
+    .replace(/^go (?:and )?/i, "");
   if (/^(?:cancel|stop) (?:my |the )?(?:pc|computer|running) (?:task|errand)[.!]?$/i.test(text)) return { type: "cancel" };
   if (/^(?:don't|do not|never|stop|cancel|how|what|why|when|did|is|are|if|imagine|explain|tell me|remind|help|plan|should|would)\b/i.test(text)) return;
   if (/\b(?:ignore|bypass|disable|override)\b.{0,35}\b(?:permission|guardrail|rule|safety|sandbox)/i.test(text)) return;
