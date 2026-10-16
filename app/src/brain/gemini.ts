@@ -103,26 +103,31 @@ export async function* askGemini(config: GeminiConfig, memory: ClaudeConfig, mes
   const system = `${persona}\nYou are answering as Jarvis through Google's Gemini. You have no tools and cannot write files or control the PC.${privateData}`;
 
   const session = sessionId ?? randomUUID();
-  const body = buildGeminiBody(config.model, message, system, sessionId ? threads.get(sessionId) : undefined);
-
+  const previousId = sessionId ? threads.get(sessionId) : undefined;
   const timeout = AbortSignal.timeout(memory.timeoutMs);
-  let res: Response;
-  try {
-    res = await fetch(ENDPOINT, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-goog-api-key": config.apiKey },
-      body: JSON.stringify(body),
-      signal: AbortSignal.any([signal, timeout]),
-    });
-  } catch {
-    yield { type: "error", code: "unavailable", message: signal.aborted ? "Request cancelled." : FAILURE_TEXT.unavailable };
-    return;
+
+  // Google answers 503 "high demand" for busy models; retry once on the backup model.
+  const models = [config.model, config.fallbackModel].filter((m, i, all) => m && all.indexOf(m) === i);
+  let res: Response | undefined;
+  for (const model of models) {
+    try {
+      res = await fetch(ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-goog-api-key": config.apiKey },
+        body: JSON.stringify(buildGeminiBody(model, message, system, previousId)),
+        signal: AbortSignal.any([signal, timeout]),
+      });
+    } catch {
+      yield { type: "error", code: "unavailable", message: signal.aborted ? "Request cancelled." : FAILURE_TEXT.unavailable };
+      return;
+    }
+    if (res.status !== 503 && res.status !== 500) break;
   }
 
-  if (!res.ok || !res.body) {
+  if (!res || !res.ok || !res.body) {
     // Only the error code is read; the key is never echoed or logged.
-    const detail = (await res.json().catch(() => undefined)) as { error?: { code?: string } } | undefined;
-    const code = classifyGeminiError(res.status, detail?.error?.code);
+    const detail = (await res?.json().catch(() => undefined)) as { error?: { code?: string } } | undefined;
+    const code = classifyGeminiError(res?.status, detail?.error?.code);
     yield { type: "error", code, message: FAILURE_TEXT[code] };
     return;
   }

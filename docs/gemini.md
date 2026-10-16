@@ -37,6 +37,7 @@ Without the secret, the Gemini option shows as disabled.
 | --- | --- | --- |
 | `GEMINI_API_KEY` | (none) | Turns Gemini on. |
 | `GEMINI_MODEL` | `gemini-3.8-flash` | Model ID, e.g. `gemini-3.5-flash-lite` for cheaper answers. |
+| `GEMINI_FALLBACK_MODEL` | `gemini-3.5-flash-lite` | Tried once when the main model answers 503 (overloaded). |
 | `GEMINI_SHARE_VAULT` | `false` | Send vault excerpts and tasks with each question. |
 | `GEMINI_ENABLED` | `true` | Set to `false` to switch Gemini off while keeping the key. |
 

@@ -36,6 +36,8 @@ export interface GeminiConfig {
   enabled: boolean;
   apiKey: string;
   model: string;
+  /** Tried once when the main model is overloaded (HTTP 503). */
+  fallbackModel: string;
   /** Send vault excerpts and dashboard tasks to Gemini. Off by default: on Google's free tier, prompts may be used for training. */
   shareVault: boolean;
 }
@@ -65,6 +67,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
       enabled: Boolean(source.GEMINI_API_KEY?.trim()) && source.GEMINI_ENABLED !== "false",
       apiKey: source.GEMINI_API_KEY?.trim() || "",
       model: source.GEMINI_MODEL?.trim() || "gemini-3.8-flash",
+      fallbackModel: source.GEMINI_FALLBACK_MODEL?.trim() || "gemini-3.5-flash-lite",
       shareVault: source.GEMINI_SHARE_VAULT === "true",
     },
     claude: {

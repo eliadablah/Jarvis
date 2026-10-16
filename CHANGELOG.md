@@ -2,6 +2,10 @@
 
 ## 2026-10-15
 
+### Fix - Gemini retries on a backup model when Google is busy
+
+- First live test on dev: `gemini-3.8-flash` answered 503 "high demand", so Jarvis showed "Gemini could not answer". Jarvis now retries once on `gemini-3.5-flash-lite` (`GEMINI_FALLBACK_MODEL`) when the main model returns 500/503.
+
 ### Feature - Gemini as a third chat engine
 
 - Added Gemini (Google's Interactions API over plain `fetch`, model `gemini-3.8-flash`), selectable on the dashboard and in face mode. Auto uses it as the last fallback when Claude and Codex both refuse.
