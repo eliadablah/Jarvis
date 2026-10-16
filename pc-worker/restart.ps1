@@ -24,14 +24,35 @@ $workers = @(Get-CimInstance Win32_Process -Filter "Name='node.exe'" | Where-Obj
 foreach ($process in $workers) {
   Stop-Process -Id $process.ProcessId -ErrorAction Stop
 }
-$launchedAt = [DateTimeOffset]::UtcNow
-$started = Start-Process -FilePath $node -ArgumentList ('"{0}"' -f $worker) -WorkingDirectory $root -WindowStyle Hidden -PassThru
-$deadline = (Get-Date).AddSeconds(45)
-do {
-  Start-Sleep -Seconds 2
-  $started.Refresh()
-  if ($started.HasExited) { throw "Worker exited. See $env:USERPROFILE\.jarvis\pc-worker.log." }
-  try { $activity = Read-WorkerActivity } catch { $activity = $null }
-} until (($activity.workerOnline -and $activity.protocol -eq 2 -and $activity.workerSeenAt -and [DateTimeOffset]::Parse($activity.workerSeenAt) -gt $launchedAt) -or (Get-Date) -gt $deadline)
-if (-not $activity.workerSeenAt -or [DateTimeOffset]::Parse($activity.workerSeenAt) -le $launchedAt) { throw "Worker started but did not report online. Check its log." }
-Write-Host "Jarvis PC worker restarted and reporting online."
+# Retry only a native startup crash, never an interrupted task.
+for ($attempt = 1; $attempt -le 3; $attempt++) {
+  if (Test-Path -LiteralPath $statePath) {
+    $state = Get-Content -LiteralPath $statePath -Raw | ConvertFrom-Json
+    if ($state.recoveryHold -or $state.active -or $state.outbox) { throw 'Worker has unfinished activity; inspect PC activity before restarting.' }
+  }
+  $activity = Read-WorkerActivity
+  if ($activity.tasks | Where-Object { $_.status -in @('running', 'cancelling') }) { throw 'A PC task is active; no startup retry was made.' }
+  $launchedAt = [DateTimeOffset]::UtcNow
+  $stamp = Get-Date -Format 'yyyyMMdd-HHmmss-fff'
+  $stdout = Join-Path $env:USERPROFILE ('.jarvis\worker-startup-' + $stamp + '.out.log')
+  $stderr = Join-Path $env:USERPROFILE ('.jarvis\worker-startup-' + $stamp + '.err.log')
+  $started = Start-Process -FilePath $node -ArgumentList ('"{0}"' -f $worker) -WorkingDirectory $root -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
+  $deadline = (Get-Date).AddSeconds(45)
+  do {
+    Start-Sleep -Seconds 2
+    $started.Refresh()
+    if ($started.HasExited) { break }
+    try { $activity = Read-WorkerActivity } catch { $activity = $null }
+    if ($activity.workerOnline -and $activity.protocol -eq 2 -and $activity.workerSeenAt -and [DateTimeOffset]::Parse($activity.workerSeenAt) -gt $launchedAt) {
+      Write-Host 'Jarvis PC worker restarted and reporting online.'
+      return
+    }
+  } while ((Get-Date) -lt $deadline)
+  if (-not $started.HasExited) { throw "Worker started but did not report online. See $stderr and $stdout. Do not start a second worker." }
+  $code = $started.ExitCode
+  if ($code -eq -1073741819 -and $attempt -lt 3) {
+    Write-Warning "Windows crashed Node during startup (0xc0000005). Checking for unfinished work before retry $($attempt + 1)."
+    continue
+  }
+  throw "Worker exited with code $code. Startup error: $stderr. Startup output: $stdout."
+}

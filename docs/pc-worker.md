@@ -82,3 +82,5 @@ From app/: npm run typecheck, npm test, npm run test:pc, npm run build. CI runs 
 No automatic job submissions, real emails, purchases or account changes are part of the integration smoke tests.
 
 Restart checks use bounded Node HTTPS with certificate validation. Failed preflight leaves the existing worker alone. Check Tailscale if the private dev status cannot be reached. Windows-MCP 0.8.8 requires the verified exclusion filter: --exclude-tools Registry,DisplayInventory,Scrape exposes the intended 18 tools; its explicit --tools filter exposed zero with the installed FastMCP registry.
+
+The restart helper saves timestamped startup output/error logs in .jarvis. A Windows Node 0xc0000005 startup crash gets at most three attempts, with local state and server activity checked again before each. Any unfinished task, pending report, recovery hold or non-native error stops retries. Persistent Windows crashes still need diagnosis; the helper does not disable Windows protections.
