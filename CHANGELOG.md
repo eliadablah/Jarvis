@@ -2,6 +2,11 @@
 
 ## 2026-10-16
 
+### Change - Word-by-word spoken caption, voice at 1.75x
+
+- With voice on, the dashboard no longer opens the reply panel over the views. The sentence being spoken appears in a centered caption and each word lights up as it's said (browser word-boundary events, with a timing estimate for voices that don't send them). A pulse shows while Jarvis is thinking; the caption fades out after the reply, and click or Escape closes it. With voice off, the reply panel works as before.
+- Voice speed lowered from 2.5x to 1.75x (Kokoro, face-mode fallback voice, and dashboard).
+
 ### Feature - Jarvis applies to jobs through a PC worker
 
 - "Apply to jobs" / "find me jobs" in chat now queues an errand instead of answering. A worker on my PC (`pc-worker/`) picks it up, runs Claude Code with Chrome control in my ai-job-search workspace, applies on LinkedIn Easy Apply in my signed-in Chrome (up to 10 per run), and reports back; the report is available to the chat.

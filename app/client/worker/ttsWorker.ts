@@ -22,7 +22,7 @@ const KOKORO_URL: string = "/voice/kokoro.web.js";
 const MODEL_ID = "onnx-community/Kokoro-82M-v1.0-ONNX";
 const VOICE = "bm_lewis";
 /** Eli likes replies fast; Kokoro's own speed keeps the pitch natural. Same as browserVoice.ts. */
-const SPEED = 2.5;
+const SPEED = 1.75;
 
 let tts: KokoroTTS | undefined;
 let loading: Promise<KokoroTTS> | undefined;

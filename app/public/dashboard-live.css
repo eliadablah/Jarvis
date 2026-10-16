@@ -3,6 +3,63 @@
 .model-status { margin: 12px 0; padding: 12px 0; border-bottom: 1px solid var(--line); }
 .model-status strong { display: block; margin: 7px 0; }
 .model-status p { margin: 5px 0; }
+/* Spoken-reply caption (speechCaption.js): centered, word-by-word highlight. */
+.speech-caption {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  z-index: 450;
+  width: min(760px, calc(100vw - 32px));
+  padding: 28px 32px;
+  border-radius: 24px;
+  background: color-mix(in srgb, var(--bg, #0e1312) 78%, transparent);
+  border: 1px solid color-mix(in srgb, var(--mint, #b8eccb) 22%, transparent);
+  box-shadow: 0 0 80px color-mix(in srgb, var(--mint, #b8eccb) 12%, transparent), 0 20px 60px #0008;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  text-align: center;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -46%) scale(.97);
+  transition: opacity .35s ease, transform .35s ease;
+}
+.speech-caption.visible { opacity: 1; pointer-events: auto; transform: translate(-50%, -50%) scale(1); }
+.speech-caption-line {
+  margin: 0;
+  font-size: clamp(20px, 3.2vw, 32px);
+  font-weight: 600;
+  line-height: 1.45;
+  letter-spacing: -.01em;
+}
+.speech-caption-line.enter { animation: caption-enter .3s ease both; }
+.speech-caption-word {
+  display: inline-block;
+  color: color-mix(in srgb, var(--muted, #86958c) 70%, transparent);
+  transition: color .18s ease, transform .18s ease, text-shadow .18s ease;
+}
+.speech-caption-word.spoken { color: #e8f2ec; }
+.speech-caption-word.current {
+  color: var(--mint, #b8eccb);
+  transform: translateY(-2px) scale(1.08);
+  text-shadow: 0 0 18px color-mix(in srgb, var(--mint, #b8eccb) 60%, transparent);
+}
+.speech-caption-dot {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin: 0 6px;
+  border-radius: 50%;
+  background: var(--mint, #b8eccb);
+  animation: caption-pulse 1.1s ease-in-out infinite;
+}
+.speech-caption-dot:nth-child(2) { animation-delay: .15s; }
+.speech-caption-dot:nth-child(3) { animation-delay: .3s; }
+@keyframes caption-enter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes caption-pulse { 0%, 100% { opacity: .25; transform: scale(.8); } 50% { opacity: 1; transform: scale(1.1); } }
+@media (prefers-reduced-motion: reduce) {
+  .speech-caption, .speech-caption-word, .speech-caption-line.enter, .speech-caption-dot { transition: none; animation: none; }
+}
 @media (max-width: 1200px) {
   body.reply-open .shell .companion {
     display: flex;
