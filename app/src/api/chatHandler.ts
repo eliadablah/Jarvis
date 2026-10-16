@@ -8,6 +8,10 @@ import { getChatRouter } from "../brain/router.ts";
 import type { ChatEvent } from "../brain/events.ts";
 import { ChatRequestError, checkRequestSource, parseChatRequest, readBody } from "./chatRequest.ts";
 import { dashboardDir, readDashboard, type DashboardTask } from "../dashboard.ts";
+import { pcTaskContext } from "../pcTasks/api.ts";
+import { handOffJobErrand } from "../pcTasks/handoff.ts";
+import { isJobErrand } from "../pcTasks/intent.ts";
+import { readPcTasks } from "../pcTasks/store.ts";
 
 let busy = false;
 
@@ -51,6 +55,11 @@ export async function handleChat(req: IncomingMessage, res: ServerResponse, conf
   } catch {
     chat.serverContext = '{"source":"Server-saved Jarvis dashboard tasks","status":"Current saved tasks are unavailable. Do not invent them."}';
   }
+  // Reports from the PC worker, so "how did the job applying go?" has an answer.
+  try {
+    const pcTasks = (await readPcTasks(dashboardDir(config))).tasks;
+    if (pcTasks.length) chat.serverContext += `\n${pcTaskContext(pcTasks)}`;
+  } catch { /* no reports yet */ }
 
   // Stop Claude Code if the browser goes away mid-answer.
   const abort = new AbortController();
@@ -64,8 +73,13 @@ export async function handleChat(req: IncomingMessage, res: ServerResponse, conf
 
   const send = (event: ChatEvent) => res.write(`${JSON.stringify(event)}\n`);
 
+  // Job hunting is an errand for my PC (pc-worker/), not a chat answer.
+  const events = config.pcWorkerToken && isJobErrand(chat.message)
+    ? handOffJobErrand(dashboardDir(config), chat.message, chat.sessions?.claude ?? chat.sessionId)
+    : getChatRouter(config).answer(chat, abort.signal);
+
   try {
-    for await (const event of getChatRouter(config).answer(chat, abort.signal)) {
+    for await (const event of events) {
       send(event);
     }
   } catch (err) {

@@ -27,6 +27,8 @@ export interface AppConfig {
   claude: ClaudeConfig;
   codex?: CodexConfig;
   gemini?: GeminiConfig;
+  /** Shared secret for the PC worker (pc-worker/). Empty turns PC errands off. */
+  pcWorkerToken: string;
 }
 
 export interface CodexConfig { enabled: boolean; bin: string; model: string; connectorsEnabled?: boolean; }
@@ -70,6 +72,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
       fallbackModel: source.GEMINI_FALLBACK_MODEL?.trim() || "gemini-3.5-flash-lite",
       shareVault: source.GEMINI_SHARE_VAULT === "true",
     },
+    pcWorkerToken: source.PC_WORKER_TOKEN?.trim() || "",
     claude: {
       bin: source.CLAUDE_BIN?.trim() || "claude",
       model: source.CLAUDE_MODEL?.trim() || "opus",

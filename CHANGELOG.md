@@ -2,6 +2,12 @@
 
 ## 2026-10-16
 
+### Feature - Jarvis applies to jobs through a PC worker
+
+- "Apply to jobs" / "find me jobs" in chat now queues an errand instead of answering. A worker on my PC (`pc-worker/`) picks it up, runs Claude Code with Chrome control in my ai-job-search workspace, applies on LinkedIn Easy Apply in my signed-in Chrome (up to 10 per run), and reports back; the report is available to the chat.
+- Worker endpoints need the `PC_WORKER_TOKEN` bearer token (GitHub secret → server `.env`); without it the feature stays off. See `docs/pc-worker.md`.
+- Tests: queue, intent, and token checks.
+
 ### Change - Faster voice replies
 
 - Spoken replies play at 2.5x: Kokoro's own `speed` setting (keeps the pitch natural), the face-mode browser fallback voice, and the dashboard voice.

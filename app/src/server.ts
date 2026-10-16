@@ -13,6 +13,7 @@ import { servePublic } from "./http/publicFiles.ts";
 import { appHeaders } from "./http/securityHeaders.ts";
 
 import { handleDashboard } from './dashboard.ts';
+import { handlePcTasks } from "./pcTasks/api.ts";
 
 const config = loadConfig();
 
@@ -22,6 +23,12 @@ const server = createServer((req, res) => {
 
   if (path.startsWith('/api/dashboard')) {
     handleDashboard(req, res, path, config).catch(() => { if (!res.headersSent) res.writeHead(500); res.end(); });
+    return;
+  }
+
+  // --- PC errands (job applying runs on my PC, see pc-worker/) ---
+  if (path.startsWith("/api/pc/")) {
+    handlePcTasks(req, res, path, config).catch(() => { if (!res.headersSent) res.writeHead(500); res.end(); });
     return;
   }
 
