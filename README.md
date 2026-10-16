@@ -54,7 +54,7 @@ Nothing reaches prod without passing through dev first. Details in [docs/environ
 - [x] HTTPS on my own domain: `https://dev-jarvis.eliadablah.com`, reachable only on my private network, certificate issued by CI with no AWS credentials on the server
 - [x] Text chat with Jarvis on the site, powered by Claude Code (talk only, no tools yet)
 - [x] Jarvis reads my Obsidian vault: private repo, read-only deploy key, synced every 5 minutes, read-only tools
-- [ ] Voice: mic button and spoken answers in the browser
+- [x] The local experience on the web: full-screen ai-visualizer face, hold-to-talk mic, and Kokoro `bm_lewis` voice in the browser, with the face moving to the real audio
 - [ ] Approval-gated deploys to prod at `https://jarvis.eliadablah.com` (pipeline ready, waiting on `jarvis-prod`)
 
 ## Repo layout
@@ -79,4 +79,4 @@ See [docs/setup.md](docs/setup.md).
 
 ## Credits
 
-Jarvis runs on the open-source [fullstack-agent](https://github.com/jaredrhod/fullstack-agent) kit by [jaredrhod](https://github.com/jaredrhod). Its parts keep their own licenses (AGPL-3.0, plus CC BY-SA 4.0 for the vault templates) and are installed from their own repos, not copied here.
+Jarvis runs on the open-source [fullstack-agent](https://github.com/jaredrhod/fullstack-agent) kit by [jaredrhod](https://github.com/jaredrhod). Its parts keep their own licenses (AGPL-3.0, plus CC BY-SA 4.0 for the vault templates) and are installed from their own repos, not copied here. The web faces are [ai-visualizer](https://github.com/jaredrhod/ai-visualizer) (AGPL-3.0), fetched unchanged at build time. The browser voice is [Kokoro](https://github.com/hexgrad/kokoro) via kokoro-js (Apache-2.0).

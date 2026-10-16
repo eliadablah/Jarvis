@@ -1,18 +1,28 @@
+# syntax=docker/dockerfile:1
 # Jarvis web app image.
-# Stage 1 compiles TypeScript and runs the tests; stage 2 ships the compiled
-# JavaScript plus Claude Code (the brain), running as the unprivileged
-# "node" user. Debian slim instead of Alpine because Claude Code ships a
-# native binary built for glibc.
+# Stage 1 compiles TypeScript, runs the tests, and gathers the self-hosted
+# voice engine files. Stage 2 fetches the ai-visualizer faces. Stage 3 ships
+# the compiled app, the faces, and Claude Code (the brain), running as the
+# unprivileged "node" user. Debian slim instead of Alpine because Claude
+# Code ships a native binary built for glibc.
 
 FROM node:24-bookworm-slim AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund
-COPY tsconfig.json tsconfig.client.json ./
+COPY tsconfig.json tsconfig.client.json tsconfig.worker.json ./
 COPY src ./src
 COPY client ./client
+COPY public ./public
+COPY scripts ./scripts
 COPY test ./test
 RUN npm run typecheck && npm test && npm run build
+
+# The faces: jaredrhod/ai-visualizer (AGPL-3.0), pinned to the same commit
+# as my local install. Only the browser files are kept; its Python server
+# isn't needed because the app feeds the faces itself.
+FROM scratch AS visualizer
+ADD https://github.com/jaredrhod/ai-visualizer.git#6921e1d4b06bdd4a34c5264882d5257c4d5f70fd /src
 
 FROM node:24-bookworm-slim
 
@@ -25,6 +35,7 @@ RUN npm install -g --no-audit --no-fund "@anthropic-ai/claude-code@${CLAUDE_CODE
 WORKDIR /app
 ENV NODE_ENV=production \
     PORT=3000 \
+    VISUALIZER_DIR=/app/visualizer \
     JARVIS_PERSONA_PATH=/app/persona/jarvis.md \
     JARVIS_WORKDIR=/home/node/workspace \
     CLAUDE_CONFIG_DIR=/home/node/.claude \
@@ -39,6 +50,9 @@ ENV APP_VERSION=${APP_VERSION}
 
 COPY --from=build /app/package.json ./
 COPY --from=build /app/dist ./dist
+COPY --from=visualizer /src/core.js /src/LICENSE ./visualizer/
+COPY --from=visualizer /src/faces ./visualizer/faces
+COPY --from=visualizer /src/assets ./visualizer/assets
 COPY persona ./persona
 
 # Claude Code keeps its conversation history under the home folder, which

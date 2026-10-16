@@ -22,6 +22,8 @@ export interface AppConfig {
   port: number;
   env: AppEnv;
   version: string;
+  /** Folder holding the ai-visualizer files (core.js, faces/, assets/). */
+  visualizerDir: string;
   claude: ClaudeConfig;
 }
 
@@ -44,6 +46,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
     port: parsePositiveInt(source.PORT, 3000),
     env: parseEnv(source.APP_ENV),
     version: source.APP_VERSION?.trim() || "unknown",
+    visualizerDir: source.VISUALIZER_DIR?.trim() || "visualizer",
     claude: {
       bin: source.CLAUDE_BIN?.trim() || "claude",
       model: source.CLAUDE_MODEL?.trim() || "opus",

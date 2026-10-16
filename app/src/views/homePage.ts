@@ -1,9 +1,12 @@
-// HTML for the chat page. The server renders the layout and passes the
-// wording to the browser script through data attributes; the script
-// (client/chat.ts, served as /chat.js) handles sending and streaming.
+// HTML for Jarvis's page: the ai-visualizer face fills the screen (in a
+// frame, fed by Jarvis's live state), with the chat, mic, and menu
+// floating on top. The browser script (client/main.ts, served as
+// /main.js) does the talking, listening, and speaking; this file only lays
+// out the page and hands the script its wording through data attributes.
 
 import type { AppConfig } from "../config.ts";
 import { content } from "../content.ts";
+import { FACES } from "../face/visualizer.ts";
 
 /** Escapes text before it goes into HTML. */
 export function escapeHtml(value: string): string {
@@ -15,64 +18,80 @@ export function escapeHtml(value: string): string {
     .replaceAll("'", "&#39;");
 }
 
-/** Renders the chat page for the given environment and version. */
+/** All page wording the browser script needs, as data-* attributes. */
+function dataAttributes(): string {
+  const strings: Record<string, string> = {
+    listening: content.listening,
+    thinking: content.thinking,
+    empty: content.emptyState,
+    errorPrefix: content.errorPrefix,
+    micUnsupported: content.micUnsupported,
+    voiceOn: content.voiceOnLabel,
+    voiceOff: content.voiceOffLabel,
+    hideChat: content.hideChatLabel,
+    showChat: content.showChatLabel,
+    voiceLoading: content.voiceLoading,
+    voiceReady: content.voiceReady,
+    voiceFailed: content.voiceFailed,
+  };
+  return Object.entries(strings)
+    .map(([key, value]) => `data-${key.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)}="${escapeHtml(value)}"`)
+    .join("\n       ");
+}
+
+/** Renders the page for the given environment and version. */
 export function renderHomePage(config: AppConfig): string {
   const envLabel = escapeHtml(content.envLabels[config.env]);
   const version = escapeHtml(config.version);
+  const faceOptions = FACES.map((face) => `<option value="${face}">${escapeHtml(content.faceNames[face])}</option>`).join("");
 
   return `<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+  <meta name="theme-color" content="#020705">
   <title>${escapeHtml(content.title)} (${envLabel})</title>
-  <style>
-    :root { color-scheme: light dark; --bg: #f5f6f8; --fg: #14171c; --muted: #5b6270; --accent: #0a7c5a; --card: #ffffff; --line: #e2e5ea; --mine: #0a7c5a; --mine-fg: #ffffff; }
-    @media (prefers-color-scheme: dark) { :root { --bg: #0e1116; --fg: #e8eaee; --muted: #9aa1ad; --accent: #3ccf98; --card: #171b22; --line: #262c36; --mine: #1f6f55; --mine-fg: #f2fff9; } }
-    * { box-sizing: border-box; }
-    html, body { height: 100%; }
-    body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, sans-serif; }
-    .app { display: flex; flex-direction: column; height: 100dvh; max-width: 720px; margin: 0 auto; }
-    header { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
-    header h1 { margin: 0; font-size: 1.25rem; }
-    .status { margin: 0; color: var(--accent); font-size: 0.85rem; font-weight: 600; }
-    .meta { margin-left: auto; text-align: right; color: var(--muted); font-size: 0.75rem; font-family: ui-monospace, monospace; }
-    button { font: inherit; cursor: pointer; border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: var(--fg); padding: 8px 14px; }
-    button:disabled { opacity: 0.5; cursor: default; }
-    #messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
-    .msg { max-width: 85%; padding: 10px 14px; border-radius: 14px; white-space: pre-wrap; overflow-wrap: anywhere; }
-    .msg.user { align-self: flex-end; background: var(--mine); color: var(--mine-fg); }
-    .msg.jarvis { align-self: flex-start; background: var(--card); border: 1px solid var(--line); }
-    .msg.error { align-self: flex-start; color: #c0392b; background: transparent; padding: 0 4px; }
-    .empty { margin: auto; color: var(--muted); text-align: center; }
-    form { display: flex; gap: 8px; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); }
-    textarea { flex: 1; resize: none; font: inherit; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--card); color: var(--fg); max-height: 160px; }
-    #send { background: var(--accent); color: #fff; border-color: transparent; font-weight: 600; }
-  </style>
+  <link rel="stylesheet" href="/app.css">
 </head>
 <body>
-  <div class="app" id="app"
-       data-thinking="${escapeHtml(content.thinking)}"
-       data-error-prefix="${escapeHtml(content.errorPrefix)}"
-       data-empty="${escapeHtml(content.emptyState)}">
-    <header>
-      <div>
-        <h1>${escapeHtml(content.title)}</h1>
-        <p class="status">${escapeHtml(content.status)}</p>
-      </div>
-      <div class="meta">${envLabel}<br>${escapeHtml(content.versionLabel)} ${version}</div>
-      <button type="button" id="new-chat">${escapeHtml(content.newChatLabel)}</button>
+  <iframe id="face" src="/face/faces/board/" title="${escapeHtml(content.title)}" tabindex="-1" aria-hidden="true"></iframe>
+
+  <div class="overlay" id="app"
+       ${dataAttributes()}>
+    <header class="topbar">
+      <button type="button" id="toggle-chat" class="ghost">${escapeHtml(content.hideChatLabel)}</button>
+      <details class="menu">
+        <summary class="ghost">${escapeHtml(content.menuLabel)}</summary>
+        <div class="menu-panel">
+          <label>${escapeHtml(content.faceLabel)}
+            <select id="face-select">${faceOptions}</select>
+          </label>
+          <button type="button" id="voice-toggle">${escapeHtml(content.voiceOnLabel)}</button>
+          <button type="button" id="new-chat">${escapeHtml(content.newChatLabel)}</button>
+          <p class="meta">${envLabel} · ${escapeHtml(content.versionLabel)} ${version}</p>
+          <p class="credit">${escapeHtml(content.credit)}
+            <a href="https://github.com/eliadablah/Jarvis" rel="noopener" target="_blank">${escapeHtml(content.sourceLabel)}</a></p>
+        </div>
+      </details>
     </header>
-    <main id="messages" aria-live="polite">
-      <p class="empty">${escapeHtml(content.emptyState)}</p>
-    </main>
+
+    <section class="chat" id="chat">
+      <div id="messages" aria-live="polite">
+        <p class="empty">${escapeHtml(content.emptyState)}</p>
+      </div>
+      <p id="status" class="status" aria-live="polite"></p>
+      <form id="chat-form">
+        <button type="button" id="mic" class="mic" aria-label="${escapeHtml(content.micLabel)}" title="${escapeHtml(content.micLabel)}">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-2.08A7 7 0 0 0 19 12h-2Z"/></svg>
+        </button>
+        <textarea id="input" rows="1" placeholder="${escapeHtml(content.inputPlaceholder)}" aria-label="${escapeHtml(content.inputPlaceholder)}"></textarea>
+        <button type="submit" id="send">${escapeHtml(content.sendLabel)}</button>
+      </form>
+    </section>
     <noscript><p class="empty">${escapeHtml(content.noScript)}</p></noscript>
-    <form id="chat-form">
-      <textarea id="input" rows="1" placeholder="${escapeHtml(content.inputPlaceholder)}" aria-label="${escapeHtml(content.inputPlaceholder)}"></textarea>
-      <button type="submit" id="send">${escapeHtml(content.sendLabel)}</button>
-    </form>
   </div>
-  <script src="/chat.js" type="module"></script>
+  <script src="/main.js" type="module"></script>
 </body>
 </html>
 `;

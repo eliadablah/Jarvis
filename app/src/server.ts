@@ -1,26 +1,25 @@
 // Entry point: starts the HTTP server and shuts it down cleanly when Docker
-// stops the container. POST /api/chat streams answers from Claude Code;
-// everything else is a simple page or file.
+// stops the container.
+//   POST /api/chat   streams answers from Claude Code
+//   /face/...        the ai-visualizer faces, fed by Jarvis's state
+//   /...             Jarvis's own page, scripts, and voice engine files
 
 import { createServer } from "node:http";
 import { loadConfig } from "./config.ts";
 import { handleRequest } from "./routes.ts";
 import { handleChat } from "./api/chatHandler.ts";
-import { getStaticFile } from "./staticFiles.ts";
+import { FACE_PREFIX, serveFace } from "./face/visualizer.ts";
+import { servePublic } from "./http/publicFiles.ts";
+import { appHeaders } from "./http/securityHeaders.ts";
 
 const config = loadConfig();
 
-const securityHeaders = {
-  "X-Content-Type-Options": "nosniff",
-  "Referrer-Policy": "no-referrer",
-  "Content-Security-Policy": "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'",
-};
-
 const server = createServer((req, res) => {
   const path = new URL(req.url ?? "/", "http://localhost").pathname;
+  const method = req.method ?? "GET";
 
   // --- Chat API ---
-  if (path === "/api/chat" && req.method === "POST") {
+  if (path === "/api/chat" && method === "POST") {
     handleChat(req, res, config).catch((err) => {
       console.error("chat handler crashed:", err);
       if (!res.headersSent) res.writeHead(500);
@@ -29,22 +28,20 @@ const server = createServer((req, res) => {
     return;
   }
 
-  // --- Browser script ---
-  const file = req.method === "GET" ? getStaticFile(path) : undefined;
-  if (file) {
-    res.writeHead(200, { ...securityHeaders, "Content-Type": file.contentType, "Cache-Control": "no-cache" });
-    res.end(file.body);
-    return;
+  // --- Files: faces and Jarvis's own browser files ---
+  if (method === "GET" || method === "HEAD") {
+    if (path.startsWith(FACE_PREFIX) && serveFace(res, path, method, config.visualizerDir)) return;
+    if (servePublic(res, path, method)) return;
   }
 
   // --- Pages and health check ---
-  const response = handleRequest(req.method ?? "GET", path, config);
+  const response = handleRequest(method, path, config);
   res.writeHead(response.status, {
-    ...securityHeaders,
+    ...appHeaders(),
     "Content-Type": response.contentType,
     "Cache-Control": "no-store",
   });
-  res.end(req.method === "HEAD" ? undefined : response.body);
+  res.end(method === "HEAD" ? undefined : response.body);
 });
 
 server.listen(config.port, () => {

@@ -2,6 +2,17 @@
 
 ## 2026-10-15
 
+### App - Face and voice, like my local Jarvis
+
+- The page is now the local Jarvis experience: the ai-visualizer circuit board fills the screen, with the chat, a hold-to-talk mic, and a menu floating on top. The menu switches between all four faces (Circuit Board, Radial, Face in the Code, Neural Core), turns the voice on or off, and starts a new chat.
+- **Face:** the visualizer files are served unchanged from jaredrhod/ai-visualizer (AGPL-3.0), pinned to commit `6921e1d`, the same one as my local install. The Docker build fetches them from GitHub. The faces normally poll a local Python server for `/state` and `/config`; a small `face-bus.js`, injected before each face's `core.js`, answers those from the page's live state (idle, listening, thinking, speaking, plus the real audio waveform).
+- **Ears:** hold the mic button (or the Home key, like local backtalk) to talk; the browser's own speech recognition turns it into a message.
+- **Mouth:** Kokoro (kokoro-js 1.2.1) with the same `bm_lewis` voice as backtalk, running in a Web Worker in the browser. The answer is spoken sentence by sentence while it streams, and the audio's waveform drives the face. The model (~92 MB, q8) downloads once from Hugging Face and is cached; the engine files are self-hosted, with the build checking that their ONNX Runtime version matches the one bundled in Kokoro.
+- **Security:** new file serving refuses paths outside its folder, dotfiles, and unknown file types. Separate content security policies for the app (only its own code, plus Hugging Face for model downloads, and `wasm-unsafe-eval` for the speech engine) and the faces (which need inline scripts).
+- **Found and fixed while testing:** a worker message race (the worker listened only after importing the engine, so the first message was lost), a sentence splitter that stalled on numbers like "2.1", and an engine hang inside the worker when the page is cross-origin isolated (the page is now not isolated, so the engine runs single-threaded in the worker).
+- Measured locally: the face follows state changes; the voice loads from cache in ~2 seconds and generates a 4.3-second sentence in ~15 seconds in the test browser (first load included), which is slower than real time. Real-world speed on my phone and PC still to be checked.
+- Tests: 35 passing (adds sentence splitting, safe file paths, and face bus injection).
+
 ### Test - Vault on dev
 
 - Deploy `2bcc660` succeeded. Asked "what are my open priorities?" in a new chat: Jarvis read `Active Priorities.md` from the synced vault and listed all seven items.

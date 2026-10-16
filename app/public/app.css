@@ -1,0 +1,69 @@
+/* Jarvis page styles: the face fills the screen; the chat floats on top in
+   the face's own palette (deep green-black, mint text, gold accents). */
+
+:root {
+  color-scheme: dark;
+  --bg: #020705;
+  --panel: rgba(4, 16, 11, 0.72);
+  --panel-solid: #06140e;
+  --line: rgba(61, 220, 132, 0.22);
+  --ink: #e8f0f2;
+  --muted: #8aa197;
+  --green: #3ddc84;
+  --mint: #8fe8b8;
+  --gold: #e7c368;
+  --red: #ff6b6b;
+  --mono: "SF Mono", Menlo, Consolas, ui-monospace, monospace;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--ink); font: 15px/1.5 system-ui, sans-serif; overflow: hidden; }
+
+/* The face: full screen, behind everything, never takes clicks. */
+#face { position: fixed; inset: 0; width: 100vw; height: 100dvh; border: 0; pointer-events: none; }
+
+.overlay { position: fixed; inset: 0; display: flex; flex-direction: column; justify-content: space-between;
+           padding: max(12px, env(safe-area-inset-top)) 16px max(12px, env(safe-area-inset-bottom)); pointer-events: none; }
+.overlay > * { pointer-events: auto; }
+
+/* --- Top bar --- */
+/* Centered: the face's own title sits top-left and its status top-right. */
+.topbar { display: flex; align-items: center; gap: 8px; justify-content: center; }
+.meta { margin: 0; font: 11px var(--mono); letter-spacing: 0.18em; color: var(--muted); text-transform: uppercase; }
+button, select, summary { font: inherit; color: var(--ink); }
+.ghost { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 6px 12px; cursor: pointer; font-size: 13px; list-style: none; }
+summary::-webkit-details-marker { display: none; }
+.menu { position: relative; }
+.menu-panel { position: absolute; left: 50%; transform: translateX(-50%); top: calc(100% + 6px); width: min(300px, 86vw); background: var(--panel-solid);
+              border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: grid; gap: 10px; z-index: 5; }
+.menu-panel label { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
+.menu-panel select, .menu-panel button { background: #0b1f16; border: 1px solid var(--line); border-radius: 8px; padding: 8px; cursor: pointer; text-align: left; }
+.credit { margin: 0; font-size: 11px; color: var(--muted); }
+.credit a { color: var(--mint); }
+
+/* --- Chat panel --- */
+.chat { width: min(720px, 100%); margin: 0 auto; display: flex; flex-direction: column; gap: 8px; }
+.chat.hidden #messages { display: none; }
+#messages { max-height: 38dvh; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 10px;
+            background: var(--panel); border: 1px solid var(--line); border-radius: 14px; backdrop-filter: blur(6px); }
+.msg { max-width: 88%; padding: 8px 12px; border-radius: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.msg.user { align-self: flex-end; background: rgba(61, 220, 132, 0.18); border: 1px solid rgba(61, 220, 132, 0.35); }
+.msg.jarvis { align-self: flex-start; background: rgba(255, 255, 255, 0.04); border: 1px solid var(--line); }
+.msg.error { align-self: flex-start; color: var(--red); background: transparent; padding: 0 4px; }
+.empty { margin: 4px auto; color: var(--muted); text-align: center; font-size: 14px; }
+.status { min-height: 1.2em; margin: 0; font: 12px var(--mono); letter-spacing: 0.12em; color: var(--mint); text-align: center; }
+
+form { display: flex; gap: 8px; align-items: flex-end; }
+textarea { flex: 1; resize: none; font: inherit; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line);
+           background: var(--panel-solid); color: var(--ink); max-height: 140px; }
+#send { background: var(--green); color: #031009; border: 0; border-radius: 12px; padding: 10px 16px; font-weight: 700; cursor: pointer; }
+button:disabled { opacity: 0.5; cursor: default; }
+
+/* Hold-to-talk mic: round, glows gold while held. */
+.mic { width: 46px; height: 46px; flex: none; border-radius: 50%; border: 1px solid var(--line); background: var(--panel-solid);
+       display: grid; place-items: center; cursor: pointer; touch-action: none; user-select: none; -webkit-user-select: none; }
+.mic svg { width: 22px; height: 22px; fill: var(--mint); }
+.mic.active { background: var(--gold); box-shadow: 0 0 22px rgba(231, 195, 104, 0.7); }
+.mic.active svg { fill: #1a1405; }
+.mic.unsupported { opacity: 0.4; }
