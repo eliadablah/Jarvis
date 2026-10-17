@@ -2,6 +2,12 @@
 
 ## 2026-10-17
 
+### Feature - Jarvis for Windows desktop app
+
+- Added `desktop/`: an Electron app (per-user NSIS installer, `Jarvis-Setup-0.1.0.exe`) that loads the same private dev dashboard in its own window with a tray, Start menu and desktop shortcuts. It keeps the existing PC worker separate and never rotates its credentials.
+- Security: sandboxed, context-isolated renderer with no Node integration, no general IPC bridge or remote debugging; outside HTTPS links open in the system browser after confirmation. Hold-to-talk uses the local Windows speech recognizer through a narrow bridge (stops on release, focus loss, or after 60 seconds).
+- Build output and `node_modules` stay out of the repo. Unsigned local build; 6 desktop tests pass (`npm test` in `desktop/`).
+
 ### Fix - Translate approved Chrome uploads to file contents
 
 - Added a private stdio controller for the installed Chrome bridge's path/content mismatch. It reads only connected resume/CV folders, enforces the 10 MB limit, and sends file contents through Chrome's batch transport while retaining site permission checks. Disabled tools are also rejected inside batches. No file contents enter model context or logs.

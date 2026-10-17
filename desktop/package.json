@@ -1,0 +1,58 @@
+{
+  "name": "jarvis-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Jarvis Windows application connected to the shared personal dashboard and existing PC worker.",
+  "author": "Elikem Adablah",
+  "main": "main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test --test-isolation=none test/*.test.cjs",
+    "dist": "powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1"
+  },
+  "devDependencies": {
+    "electron": "44.9.0",
+    "electron-builder": "26.15.3"
+  },
+  "build": {
+    "appId": "com.eliadablah.jarvis",
+    "productName": "Jarvis",
+    "copyright": "Copyright © Elikem Adablah",
+    "asar": true,
+    "directories": {
+      "output": "release",
+      "buildResources": "assets"
+    },
+    "files": [
+      "main.cjs",
+      "policy.cjs",
+      "preload.cjs",
+      "speech.ps1",
+      "offline.html",
+      "assets/**",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "assets/jarvis.ico",
+      "requestedExecutionLevel": "asInvoker",
+      "artifactName": "Jarvis-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowElevation": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Jarvis",
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false
+    },
+    "asarUnpack": [
+      "speech.ps1"
+    ],
+    "npmRebuild": false
+  }
+}
