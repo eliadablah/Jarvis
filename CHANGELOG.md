@@ -6,7 +6,8 @@
 
 - Jarvis now recognizes how people really give orders: "go ahead and ...", "feel free to ...", "make sure you ...", "let's ...", "okay Jarvis, ...", "can/could/would you (please) ...", "I need/want/'d like you to ...", "you should ...", with trailing "for me / please / thanks / right now" ignored. Statements ("I'm getting paid on Friday", "I need to apply to more jobs"), questions, negations and hypotheticals ("would you open Notepad if I asked?") still never run. The cleanup is in `app/src/pcTasks/phrasing.ts`; the strict PC-task grammar after it is unchanged, so politeness cannot widen what executes.
 - When a message needs something chat can't do (a payday for the calendar, a file to organize), the persona makes the model end with a `PC_TASK` line. The dashboard hides it and shows a card with the exact task and a Run on my PC button (`app/public/pcOffer.js`). Nothing runs until the tap, which sends the normal validated "In my Chrome / On my PC, execute this task: ..." command.
-- Tests: 95 app tests and 20 worker tests passing (new phrase table, offer parsing, and a check that a model-written offer cannot become a job submission).
+- The offer rule is also repeated in the per-turn guidance sent to all three engines. On first live test the persona alone was ignored in a resumed conversation where earlier replies had said "I can't"; a fresh conversation followed it correctly.
+- Tests: 96 app tests and 20 worker tests passing (new phrase table, offer parsing, a check that a model-written offer cannot become a job submission, and that every engine gets the offer format each turn).
 
 ### Fix - Tracker dates on the Job search card
 
