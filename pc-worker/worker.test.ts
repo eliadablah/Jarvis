@@ -109,7 +109,7 @@ test("history pruning preserves every active task and unscoped legacy tasks do n
 test("capabilities and cooldowns control routing; no fallback after tools", () => {
   const settings = { server: "https://example.com", token: "test", jobsDir: ".", claudeBin: "claude", codexBin: "codex" };
   let statuses = agentStatuses(settings, {}, 0);
-  assert.deepEqual(chooseAgents(plan("Find support jobs"), statuses), ["claude-chrome"]);
+  assert.deepEqual(chooseAgents(plan("Find support jobs"), statuses), ["claude-chrome", "codex-computer"]);
   assert.deepEqual(chooseAgents(plan("In my assistant workspace, create a note"), statuses), ["codex-local", "claude-files"]);
   statuses = agentStatuses(settings, { "codex-local": { until: 1000, reason: "limit" } }, 0);
   assert.deepEqual(chooseAgents(plan("In my assistant workspace, create a note"), statuses), ["claude-files"]);
@@ -205,6 +205,27 @@ test('both engines receive native MCP tools while retaining platform sandbox con
  assert.ok(!codexArgs(settings).includes('approvals_reviewer="auto_review"'));
  assert.match(promptFor({id:'test',workerId:'worker',lease:'lease',plan:native,request:'Open Excel'}),/Computer action mode/);
  assert.match(promptFor({id:'test',workerId:'worker',lease:'lease',plan:plan('In my Chrome, execute this task: edit the spreadsheet'),request:'Edit the spreadsheet'}),/Browser action mode/);
+});
+test('Codex browser jobs use Chrome directly without desktop tools; workspace stays isolated',()=>{
+ const settings={server:'https://example.com',token:'test',jobsDir:'.',claudeBin:'C:/private/claude.exe',codexBin:'codex',windowsMcpCommand:'windows-mcp'};
+ const browser=codexArgs(settings,true,true);
+ assert.ok(browser.includes('mcp_servers.jarvis-chrome.command="C:/private/claude.exe"'));
+ assert.ok(browser.includes('mcp_servers.jarvis-chrome.args=["--claude-in-chrome-mcp"]'));
+ assert.ok(browser.includes('mcp_servers.jarvis-chrome.required=true'));
+ assert.ok(!browser.join(' ').includes('jarvis-windows'));
+ const tools=JSON.parse(browser.find(a=>a.startsWith('mcp_servers.jarvis-chrome.enabled_tools='))!.split('=')[1]!);
+ for(const name of ['tabs_context_mcp','navigate','form_input','file_upload'])assert.ok(tools.includes(name));
+ assert.ok(!tools.includes('javascript_tool'));
+ assert.ok(browser.includes('approvals_reviewer="auto_review"'));
+ assert.ok(browser.includes('workspace-write'));
+ assert.ok(!codexArgs(settings,true).join(' ').includes('jarvis-chrome'));
+ assert.ok(!codexArgs(settings).join(' ').includes('mcp_servers.'));
+ const noWindows={...settings,windowsMcpCommand:undefined};
+ assert.ok(chooseAgents(plan('In my Chrome, find AWS docs'),agentStatuses(noWindows,{},0)).includes('codex-computer'));
+ assert.ok(!chooseAgents(plan('On my PC, execute this task: open Excel'),agentStatuses(noWindows,{},0)).includes('codex-computer'));
+ const noChrome={...settings,claudeBin:undefined};
+ assert.ok(!chooseAgents(plan('In my Chrome, find AWS docs'),agentStatuses(noChrome,{},0)).includes('codex-computer'));
+ assert.ok(chooseAgents(plan('On my PC, execute this task: open Excel'),agentStatuses(noChrome,{},0)).includes('codex-computer'));
 });
 test('old workers cannot claim native actions; new capability claims validate',async()=>withDir(async dir=>{
  const task=await enqueuePcTask(dir,'On my PC, execute this task: open Excel');

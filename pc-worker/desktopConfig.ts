@@ -16,3 +16,15 @@ export function desktopCodexArgs(settings?: WorkerSettings): string[] {
     "-c", 'mcp_servers.jarvis-windows.env.WINDOWS_MCP_WATCHDOG="false"',
     "-c", "mcp_servers.jarvis-windows.startup_timeout_sec=45", "-c", "mcp_servers.jarvis-windows.tool_timeout_sec=120"];
 }
+
+/** Claude Code 2.1.301's internal stdio bridge; recheck on CLI upgrades. */
+export const CHROME_TOOLS = ["read_page", "find", "form_input", "computer", "browser_batch", "navigate", "get_page_text", "tabs_context_mcp", "tabs_create_mcp", "tabs_close_mcp", "file_upload", "list_connected_browsers", "select_browser", "switch_browser"];
+export function chromeCodexArgs(settings?: WorkerSettings): string[] {
+  if (!settings?.claudeBin) return [];
+  return ["-c", "mcp_servers.jarvis-chrome.command=" + JSON.stringify(settings.claudeBin),
+    "-c", 'mcp_servers.jarvis-chrome.args=["--claude-in-chrome-mcp"]',
+    "-c", "mcp_servers.jarvis-chrome.enabled_tools=" + JSON.stringify(CHROME_TOOLS),
+    "-c", "mcp_servers.jarvis-chrome.required=true",
+    "-c", "mcp_servers.jarvis-chrome.startup_timeout_sec=30",
+    "-c", "mcp_servers.jarvis-chrome.tool_timeout_sec=120"];
+}

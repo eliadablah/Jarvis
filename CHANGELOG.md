@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-17
+
+### Fix - Give Codex direct Chrome tools for browser and job tasks
+
+- Browser and job runs now connect Codex to the installed Chrome extension instead of Windows screen controls. Desktop runs retain Windows-MCP; workspace runs expose neither bridge. Advertised capabilities follow the configured executables.
+- Required MCP startup, scoped tool lists, automatic approval review and platform sandbox controls remain enforced. Site permissions and file-sharing restrictions still require their normal grants. Connected-browser discovery passed; application navigation paused at an extension permission prompt. No new application submission is verified.
+- The private bridge entrypoint was verified with Claude Code 2.1.301 and must be retested on CLI upgrades.
+
 ## 2026-10-16
 
 ### Fix - Review authorized Codex desktop actions
