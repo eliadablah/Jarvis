@@ -1,4 +1,5 @@
 import { mountPcActivity } from './pcActivity.js';
+import { startJobsPanel } from './jobsPanel.js';
 import { scheduledDesign, parseViewCommand } from './viewSchedule.js';
 import { HoldToTalk, speechInSupported } from './speechIn.js';
 import { hideCaption, showThinking, speakWithCaption } from './speechCaption.js';
@@ -144,3 +145,4 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'){$('#modal-root').re
 $('#day-label').textContent=new Date().toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric'}).toUpperCase();$('#transcript').innerHTML='<p class="brief-line">Ask Jarvis a question, add a task, or say “switch to view B”.</p><p class="brief-line muted">Hold the microphone to speak. Your saved tasks appear here.</p>';renderTasks();load();
 
 const pcActivity=mountPcActivity({api,safe,modal,toast,navigate});
+startJobsPanel();

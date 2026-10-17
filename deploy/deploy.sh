@@ -44,6 +44,8 @@ ssh "${ssh_opts[@]}" "$target" 'umask 077 && cat > ~/jarvis/certs/key.pem' < cer
   if [[ -n "${GEMINI_API_KEY:-}" ]]; then printf 'GEMINI_API_KEY=%s\n' "$GEMINI_API_KEY"; fi
   # Optional: lets my PC worker (pc-worker/) collect errands.
   if [[ -n "${PC_WORKER_TOKEN:-}" ]]; then printf 'PC_WORKER_TOKEN=%s\n' "$PC_WORKER_TOKEN"; fi
+  # Optional: read-only Google service account (base64 JSON) for the job tracker sheet.
+  if [[ -n "${GOOGLE_SERVICE_ACCOUNT_B64:-}" ]]; then printf 'GOOGLE_SERVICE_ACCOUNT_B64=%s\n' "$GOOGLE_SERVICE_ACCOUNT_B64"; fi
 } | ssh "${ssh_opts[@]}" "$target" 'umask 077 && cat > ~/jarvis/.env'
 # Vault sync: the read-only key, GitHub's pinned host keys, and the script.
 printf '%s\n' "$VAULT_DEPLOY_KEY" \

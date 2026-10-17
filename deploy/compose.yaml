@@ -23,7 +23,9 @@ services:
       # Gemini gets no vault notes or tasks unless this is "true"
       # (free-tier prompts may be used to train Google's models).
       GEMINI_SHARE_VAULT: "false"
-    # CLAUDE_CODE_OAUTH_TOKEN and GEMINI_API_KEY live only in this file on the server.
+      # My job tracker sheet. Not a secret: reading it needs the service account key below.
+      JOB_TRACKER_SHEET_ID: 1ZmuYTwQOtk-A09bLGyGi6QlfR18OfTduacYHVA8uLUk
+    # CLAUDE_CODE_OAUTH_TOKEN, GEMINI_API_KEY and GOOGLE_SERVICE_ACCOUNT_B64 live only in this file on the server.
     env_file: .env
     expose:
       - "3000"

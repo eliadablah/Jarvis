@@ -14,6 +14,7 @@ import { appHeaders } from "./http/securityHeaders.ts";
 
 import { handleDashboard } from './dashboard.ts';
 import { handlePcTasks } from "./pcTasks/api.ts";
+import { handleJobs } from "./jobs/api.ts";
 
 const config = loadConfig();
 
@@ -23,6 +24,12 @@ const server = createServer((req, res) => {
 
   if (path.startsWith('/api/dashboard')) {
     handleDashboard(req, res, path, config).catch(() => { if (!res.headersSent) res.writeHead(500); res.end(); });
+    return;
+  }
+
+  // --- Job tracker (read-only Google Sheet) ---
+  if (path === "/api/jobs") {
+    handleJobs(req, res, config).catch(() => { if (!res.headersSent) res.writeHead(500); res.end(); });
     return;
   }
 

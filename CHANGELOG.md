@@ -2,6 +2,13 @@
 
 ## 2026-10-17
 
+### Feature - Job search section connected to the Google tracker sheet
+
+- The dashboard's Job search section now shows my real pipeline (applied, need me, responses, last 7 days) and a list of recent applications with stage, pay and posting links, read live from the Google Sheets tracker through a new `GET /api/jobs`. It refreshes every two minutes and when the tab regains focus.
+- The server reads the sheet as a read-only Google service account (Viewer on that one sheet, `spreadsheets.readonly`), signing the JWT with `node:crypto` and calling the Sheets REST API with `fetch`: no new dependencies. Results are cached for a minute, with a saved copy served for up to ten minutes if Google is unreachable. `CV Used` and `Notes` never reach the browser.
+- The key travels GitHub secret `GOOGLE_SERVICE_ACCOUNT_B64` → server `.env`; without it the section keeps showing "Tracker not connected". Setup in `docs/job-tracker.md`.
+- Tests: 86 passing (adds row parsing, pipeline summary, JWT signing, and a full sign-in/cache/stale-fallback cycle against a fake Google).
+
 ### Feature - Jarvis for Windows desktop app
 
 - Added `desktop/`: an Electron app (per-user NSIS installer, `Jarvis-Setup-0.1.0.exe`) that loads the same private dev dashboard in its own window with a tray, Start menu and desktop shortcuts. It keeps the existing PC worker separate and never rotates its credentials.

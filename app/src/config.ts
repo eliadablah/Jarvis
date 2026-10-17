@@ -29,6 +29,8 @@ export interface AppConfig {
   gemini?: GeminiConfig;
   /** Shared secret for the PC worker (pc-worker/). Empty turns PC errands off. */
   pcWorkerToken: string;
+  /** Read-only Google Sheets job tracker. Off until both the sheet ID and the service account key are set. */
+  jobTracker: { sheetId: string; range: string; serviceAccountB64: string };
 }
 
 export interface CodexConfig { enabled: boolean; bin: string; model: string; connectorsEnabled?: boolean; }
@@ -73,6 +75,12 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
       shareVault: source.GEMINI_SHARE_VAULT === "true",
     },
     pcWorkerToken: source.PC_WORKER_TOKEN?.trim() || "",
+    jobTracker: {
+      sheetId: source.JOB_TRACKER_SHEET_ID?.trim() || "",
+      // No tab name means "the first tab", so renaming the tab can't break it.
+      range: source.JOB_TRACKER_RANGE?.trim() || "A1:L1000",
+      serviceAccountB64: source.GOOGLE_SERVICE_ACCOUNT_B64?.trim() || "",
+    },
     claude: {
       bin: source.CLAUDE_BIN?.trim() || "claude",
       model: source.CLAUDE_MODEL?.trim() || "opus",
