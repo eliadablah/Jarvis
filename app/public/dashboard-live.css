@@ -3,6 +3,34 @@
 .model-status { margin: 12px 0; padding: 12px 0; border-bottom: 1px solid var(--line); }
 .model-status strong { display: block; margin: 7px 0; }
 .model-status p { margin: 5px 0; }
+/* "Run this on my PC" offer (pcOffer.js): sits above the command bar until tapped or dismissed. */
+.pc-offer {
+  position: fixed;
+  left: 50%;
+  bottom: 112px;
+  z-index: 440;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: min(680px, calc(100vw - 32px));
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--bg, #0e1312) 92%, transparent);
+  border: 1px solid color-mix(in srgb, var(--mint, #b8eccb) 40%, transparent);
+  box-shadow: 0 12px 40px #0009, 0 0 40px color-mix(in srgb, var(--mint, #b8eccb) 10%, transparent);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  transform: translateX(-50%);
+  animation: offer-in .25s ease both;
+}
+.pc-offer-copy { min-width: 0; flex: 1; }
+.pc-offer-copy small { color: var(--mint, #b8eccb); font-size: 10px; font-weight: 700; letter-spacing: .12em; }
+.pc-offer-copy p { margin: 4px 0 0; font-size: 14px; line-height: 1.45; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.pc-offer-buttons { display: flex; flex-direction: column; align-items: stretch; gap: 4px; flex-shrink: 0; }
+@keyframes offer-in { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translateX(-50%); } }
+@media (max-width: 560px) { .pc-offer { flex-direction: column; align-items: stretch; gap: 10px; } .pc-offer-buttons { flex-direction: row; } .pc-offer-buttons .primary-btn { flex: 1; } }
+@media (prefers-reduced-motion: reduce) { .pc-offer { animation: none; } }
+
 /* Job search section (jobsPanel.js): live application list from the tracker sheet. */
 .job-list { display: grid; gap: 2px; margin: 12px 0; }
 .job-list-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 8px; }

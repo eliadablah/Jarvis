@@ -1,4 +1,5 @@
 import { parsePcIntent, type PcIntent } from "./intent.ts";
+import { isHypotheticalQuestion, normalizeCommand } from "./phrasing.ts";
 
 export interface PcCommand { request: string; intent: PcIntent; }
 const clarify = (message: string): PcCommand => ({ request: "", intent: { type: "clarify", message } });
@@ -42,10 +43,10 @@ function resolveJobCommand(text: string): PcCommand | undefined {
 /** Normalize explicit user commands before enqueueing. Keep the protocol-2 grammar
  * unchanged so an already-running worker can independently validate every plan. */
 export function resolvePcCommand(message: string, previousLink?: string): PcCommand | undefined {
-  let text = message.trim().replace(/’/g, "'")
-    .replace(/^(?:hey\s+)?jarvis[,!:\s]+/i, "")
-    .replace(/^(?:please\s+)?(?:(?:can|could|would|will) you\s+|i (?:want|need) you to\s+)?(?:please\s+)?/i, "")
-    .replace(/^go (?:and )?(?!to\b)/i, "");
+  // Everyday ways of giving an order ("go ahead and ...", "can you please ...",
+  // "I need you to ...") reduce to the plain command; statements stay statements.
+  if (isHypotheticalQuestion(message)) return;
+  let text = normalizeCommand(message);
   // Questions that explicitly need local PC state are read requests for the
   // desktop executor; they do not authorize changing that state.
   if (/^(?:what(?:'s| is| are)?|where|which|show|list|check|read|find|search)\b/i.test(text) && /\b(?:on my (?:pc|computer)|my (?:desktop|downloads|documents folder)|running programs|open windows)\b/i.test(text)) {

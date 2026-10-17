@@ -1,5 +1,6 @@
 import { mountPcActivity } from './pcActivity.js';
 import { startJobsPanel } from './jobsPanel.js';
+import { mountPcOffer, splitPcOffer } from './pcOffer.js';
 import { scheduledDesign, parseViewCommand } from './viewSchedule.js';
 import { HoldToTalk, speechInSupported } from './speechIn.js';
 import { hideCaption, showThinking, speakWithCaption } from './speechCaption.js';
@@ -87,8 +88,10 @@ function brief(){navigate('dashboard');openReply();const pending=tasks.filter(t=
 function modal(title,body){$('#modal-root').innerHTML=`<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true" aria-label="${safe(title)}"><div class="card-head"><h2>${safe(title)}</h2><button class="text-btn" id="close-modal" aria-label="Close dialog">${icon('close')}</button></div>${body}</section></div>`;$('#close-modal').onclick=()=>$('#modal-root').replaceChildren();$('#close-modal').focus();}
 async function addTask(title){const value=await api('/api/dashboard/tasks','POST',{title});tasks=value.tasks;renderTasks();confirmAction(`Added to your tasks: ${title}.`);}
 $('#add-task').onclick=()=>{modal('Your next move','<label for="new-task">Task</label><input class="modal-input" id="new-task" maxlength="300" placeholder="A small, clear next move"><button class="primary-btn" id="save-task">Save task</button>');$('#new-task').focus();$('#save-task').onclick=async()=>{const title=$('#new-task').value.trim();if(!title)return;const button=$('#save-task');if(button.disabled)return;button.disabled=true;try{await addTask(title);$('#modal-root').replaceChildren();}catch(e){toast(e.message);}finally{button.disabled=false;}};};
+const pcOffer=mountPcOffer({run:message=>command(message)});
 async function chat(message,source='typed'){
   if(busy){toast('Jarvis is still answering.');return;}
+  pcOffer.hide();
   busy=true;stopBriefing();if(voice)showThinking();openReply();$('#jarvis-state').textContent='Thinking';$('#transcript').replaceChildren();
   const requested=document.createElement('p');requested.className='request-line';requested.textContent=(source==='voice'?'You said: ':'You: ')+message;$('#transcript').append(requested);
   // Explicit actions are opened by the PC worker, never by guessing a URL from a model reply.
@@ -102,17 +105,18 @@ async function chat(message,source='typed'){
     function event(value){
       if(value.type==='pc_task'){$('#route-chip').textContent='PC worker · choosing available agent';void pcActivity.refresh();}
       if(value.type==='engine')$('#route-chip').textContent=`${value.provider} · ${value.reason||'selected engine'}`;
-      if(value.type==='text'){answer+=value.text;p.textContent=answer;}
+      if(value.type==='text'){answer+=value.text;p.textContent=splitPcOffer(answer).text;}
       if(value.type==='done'&&['claude','codex','gemini'].includes(value.provider)&&typeof value.sessionId==='string'){
         sessions[value.provider]=value.sessionId;try{localStorage.setItem('jarvis.sessions',JSON.stringify(sessions));}catch{}
       }
       if(value.type==='error')throw new Error(value.message||'Jarvis could not finish this answer.');
     }
     while(true){const {value,done}=await reader.read();buffer+=decoder.decode(value,{stream:!done});let index;while((index=buffer.indexOf('\n'))!==-1){const line=buffer.slice(0,index);buffer=buffer.slice(index+1);if(line.trim())event(JSON.parse(line));}if(done)break;}
-    if(buffer.trim())event(JSON.parse(buffer));if(answer)speak(answer);
+    if(buffer.trim())event(JSON.parse(buffer));
+    const reply=splitPcOffer(answer);p.textContent=reply.text;if(reply.text)speak(reply.text);if(reply.offer)pcOffer.show(reply.offer);
   }catch(e){
     controller.abort();try{await reader?.cancel();}catch{}
-    p.textContent=answer?`${answer}\n${e.message}`:e.message;speak(e.message);
+    p.textContent=answer?`${splitPcOffer(answer).text}\n${e.message}`:e.message;speak(e.message);
   }finally{reader?.releaseLock();busy=false;$('#jarvis-state').textContent='Standing by';void refreshRouting();}
 }
 async function command(text,source='typed'){if(/^(?:open|show)(?: my)? (?:pc|computer) (?:activity|tasks)[.!]?$/i.test(text)){pcActivity.open();return;}const view=parseViewCommand(text);if(view){setDesign(view.mode==='auto'?'auto':view.design,true,true);return;}const added=text.match(/^(?:jarvis[, ]+)?(?:add|create)(?: a)?(?: new)? (?:task|to.?do)(?: called| to)?[ :]+(.+)$/i);if(added){try{await addTask(added[1]);}catch(e){say(e.message);}return;}if(/^(?:jarvis[, ]+)?(?:open dashboard|brief me|show (?:my )?day|overview)[.!]?$/i.test(text)){brief();return;}if(/^(?:open|show)(?: my)? (?:tasks|to.?do(?: list)?|priorities)[.!]?$/i.test(text)){navigate('tasks');say(`You have ${tasks.filter(t=>!t.done).length} tasks waiting. ${tasks.filter(t=>!t.done).map(t=>t.title).join('. ')}`);return;}const complete=text.match(/^(?:complete|finish|mark (?:task )?)(.+?)(?: complete| done)?$/i);if(complete){const name=complete[1].trim().toLowerCase();const matches=tasks.filter(t=>!t.done&&t.title.toLowerCase()===name);if(matches.length===1){try{tasks=(await api(`/api/dashboard/tasks/${matches[0].id}`,'PATCH',{done:true})).tasks;renderTasks();confirmAction('Task completed and saved.');}catch(e){say(e.message);}return;}}await chat(text,source);}

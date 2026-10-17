@@ -96,3 +96,26 @@ Chrome uploads currently have an upstream path/content mismatch. When the privat
 Job tasks pause for visible interactive CAPTCHA challenges, not merely a hidden reCAPTCHA integration or background badge. Never solve or bypass a challenge. A live no-action false alarm was independently checked against the actual Chrome page before continuing.
 
 Codex Computer uses approval_policy=on-request and approvals_reviewer=auto_review so authorized native MCP actions reach the supported approval reviewer. The previous never policy rejected even switching to Chrome. This does not change managed profiles, writable roots, or denied-action handling. Workspace-only Codex keeps its existing never policy. Automatic review can still deny an action; report the reason and pause instead of changing tools to bypass it.
+
+## Commands, requests and statements
+
+Jarvis treats a message as an order only when it is one; the cues follow how people actually phrase requests (speech-act research on direct and conventionally indirect requests).
+
+| Counts as an order | Examples |
+|---|---|
+| Direct commands, softened or not | "pull up my tracker", "please open Notepad", "just search for DevOps jobs" |
+| Go-ahead and courtesy lead-ins | "go ahead and ...", "feel free to ...", "make sure you ...", "let's ...", "okay Jarvis, ..." |
+| Requests phrased as questions or wishes | "can/could/would you (please) ...", "I need/want/'d like you to ...", "you should ..." |
+| Courtesy after the order | "... for me", "... please", "... thanks", "... right now" |
+
+| Stays a normal chat message | Examples |
+|---|---|
+| Statements and the speaker's own plans | "I'm getting paid on Friday", "I need to apply to more jobs", "I'm going to open it later" |
+| Questions and status checks | "what jobs did you apply to?", "how did it go?", "is it possible to ..." |
+| Negations and hypotheticals | "don't apply yet", "I don't want you to ...", "would you open Notepad if I asked?" |
+
+Wording is cleaned up in `app/src/pcTasks/phrasing.ts`, then the strict protocol-2 grammar runs unchanged, so politeness never widens what can execute and a running worker validates every plan itself.
+
+### Run-on-my-PC offers
+
+When Eli states or asks for something chat cannot do (a payday for his calendar, a file to organize), the persona has the model end its reply with one `PC_TASK browser|computer: ...` line. The dashboard hides that line and shows it as a card with the exact task and a Run button (`app/public/pcOffer.js`). Nothing runs until Eli taps Run; the tap sends it as "In my Chrome, execute this task: ..." or "On my PC, execute this task: ...", validated like any typed command. The model's line is only a suggestion and is never executed on its own.
