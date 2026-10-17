@@ -2,6 +2,11 @@
 
 ## 2026-10-16
 
+### Fix - Wait for Codex Windows tools before starting a task
+
+- Made the native MCP server required for Codex computer runs, so it waits for initialization and fails before model execution when the server is unavailable. A live probe discovered all 18 tools; a missing-server probe exited with an initialization error.
+- Added explicit tool-discovery guidance for Codex's normalized namespace and reuse of suitable existing tailored PDFs. Managed permission profiles and denied-action handling remain intact.
+
 ### Fix - Fall back after report-only provider refusal
 
 - StructuredOutput and ToolSearch no longer count as possibly completed PC actions. A provider that only discovers tools or reports unavailability can hand off to Codex; real and unrecognized tool calls still prevent automatic retry.

@@ -197,6 +197,7 @@ test('both engines receive native MCP tools while retaining platform sandbox con
  assert.deepEqual(chooseAgents(plan('In my Chrome, execute this task: edit the spreadsheet'),statuses),['claude-chrome','claude-computer','codex-computer']);
  const args=claudeArgs(native,settings);assert.ok(args.includes('--mcp-config'));assert.match(args.join(' '),/jarvis-windows/);assert.match(args.join(' '),/ANONYMIZED_TELEMETRY/);assert.ok(!args.includes('--dangerously-skip-permissions'));
  assert.match(codexArgs(settings,true).join(' '),/mcp_servers.jarvis-windows.command/);assert.ok(codexArgs(settings,true).includes('workspace-write'));
+ assert.ok(codexArgs(settings,true).includes('mcp_servers.jarvis-windows.required=true'));
  assert.match(promptFor({id:'test',workerId:'worker',lease:'lease',plan:native,request:'Open Excel'}),/Computer action mode/);
  assert.match(promptFor({id:'test',workerId:'worker',lease:'lease',plan:plan('In my Chrome, execute this task: edit the spreadsheet'),request:'Edit the spreadsheet'}),/Browser action mode/);
 });

@@ -11,6 +11,7 @@ export function desktopCodexArgs(settings?: WorkerSettings): string[] {
   return ["-c", "mcp_servers.jarvis-windows.command=" + JSON.stringify(server.command),
     "-c", "mcp_servers.jarvis-windows.args=" + JSON.stringify(server.args),
     "-c", "mcp_servers.jarvis-windows.enabled_tools=" + JSON.stringify(WINDOWS_TOOLS),
+    "-c", "mcp_servers.jarvis-windows.required=true",
     "-c", 'mcp_servers.jarvis-windows.env.ANONYMIZED_TELEMETRY="false"',
     "-c", 'mcp_servers.jarvis-windows.env.WINDOWS_MCP_WATCHDOG="false"',
     "-c", "mcp_servers.jarvis-windows.startup_timeout_sec=45", "-c", "mcp_servers.jarvis-windows.tool_timeout_sec=120"];
