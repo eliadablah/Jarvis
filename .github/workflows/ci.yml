@@ -36,6 +36,8 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run test:pc
+      - name: Chrome upload controller checks
+        run: python3 ../pc-worker/chrome_bridge_test.py
       - run: npm run build
 
   terraform:

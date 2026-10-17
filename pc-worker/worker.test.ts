@@ -227,6 +227,20 @@ test('Codex browser jobs use Chrome directly without desktop tools; workspace st
  assert.ok(!chooseAgents(plan('In my Chrome, find AWS docs'),agentStatuses(noChrome,{},0)).includes('codex-computer'));
  assert.ok(chooseAgents(plan('On my PC, execute this task: open Excel'),agentStatuses(noChrome,{},0)).includes('codex-computer'));
 });
+test('Codex uses the private upload controller with connected resume folders',()=>{
+ const settings={server:'https://example.com',token:'test',jobsDir:'C:/jobs',claudeBin:'C:/private/claude.exe',chromeMcpPython:'C:/private/python.exe'};
+ const config=codexArgs(settings,true,true);
+ assert.ok(config.includes('mcp_servers.jarvis-chrome.command="C:/private/python.exe"'));
+ const encoded=config.find(arg=>arg.startsWith('mcp_servers.jarvis-chrome.args='))!;
+ const args:string[]=JSON.parse(encoded.slice(encoded.indexOf('=')+1));
+ assert.match(args[0]!,/chrome_bridge.py$/);
+ assert.equal(args[args.indexOf('--claude-bin')+1],settings.claudeBin);
+ assert.equal(args.filter(arg=>arg==='--upload-root').length,2);
+ assert.match(args.join(' '),/Resumes/);
+ assert.match(args.join(' '),/documents[\\/]cv/);
+ assert.ok(!args.includes('--dangerously-skip-permissions'));
+ assert.match(jobPrompt('Apply to one job',1,'submit'),/visible interactive CAPTCHA challenge/);
+});
 test('old workers cannot claim native actions; new capability claims validate',async()=>withDir(async dir=>{
  const task=await enqueuePcTask(dir,'On my PC, execute this task: open Excel');
  assert.equal(await claimNextPcTask(dir,'old',agents),undefined);assert.equal((await readPcTasks(dir)).tasks[0]?.status,'queued');

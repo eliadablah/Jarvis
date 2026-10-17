@@ -2,6 +2,12 @@
 
 ## 2026-10-17
 
+### Fix - Translate approved Chrome uploads to file contents
+
+- Added a private stdio controller for the installed Chrome bridge's path/content mismatch. It reads only connected resume/CV folders, enforces the 10 MB limit, and sends file contents through Chrome's batch transport while retaining site permission checks. Disabled tools are also rejected inside batches. No file contents enter model context or logs.
+- Uses the private Python installed with Windows action tools. Browser navigation remains available without that runtime; upload compatibility requires it. Actual resume attachment succeeded in a scoped probe; no application submission is claimed.
+- Clarified that background CAPTCHA elements alone are not interactive challenges. Actual challenges still pause for the user. Added controller and routing checks to CI.
+
 ### Fix - Give Codex direct Chrome tools for browser and job tasks
 
 - Browser and job runs now connect Codex to the installed Chrome extension instead of Windows screen controls. Desktop runs retain Windows-MCP; workspace runs expose neither bridge. Advertised capabilities follow the configured executables.

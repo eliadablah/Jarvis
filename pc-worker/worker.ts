@@ -1,5 +1,5 @@
 // Windows PC execution loop. Protocol 2 prevents old, unscoped workers from claiming new tasks.
-import { appendFile, readFile, mkdir } from "node:fs/promises";
+import { appendFile, readFile, mkdir, access } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -23,6 +23,11 @@ export async function loadSettings(): Promise<WorkerSettings> {
     const desktop = JSON.parse(await readFile(join(STATE_DIR, "desktop-runtime.json"), "utf8"));
     if (typeof desktop.windowsMcpCommand === "string" && desktop.transport === "stdio") settings.windowsMcpCommand = desktop.windowsMcpCommand;
   } catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+  if (!settings.chromeMcpPython) {
+    const python = join(STATE_DIR, "windows-tools", "windows-mcp", "Scripts", "python.exe");
+    try { await access(python); settings.chromeMcpPython = python; }
+    catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+  }
   const url = new URL(settings.server);
   if (url.protocol !== "https:" || url.username || url.password || !settings.token || !settings.jobsDir) throw new Error("Invalid PC worker settings.");
   settings.maxApplications = Math.min(25, Math.max(1, Number.isFinite(settings.maxApplications) ? settings.maxApplications! : 10));
