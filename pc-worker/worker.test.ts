@@ -198,6 +198,11 @@ test('both engines receive native MCP tools while retaining platform sandbox con
  const args=claudeArgs(native,settings);assert.ok(args.includes('--mcp-config'));assert.match(args.join(' '),/jarvis-windows/);assert.match(args.join(' '),/ANONYMIZED_TELEMETRY/);assert.ok(!args.includes('--dangerously-skip-permissions'));
  assert.match(codexArgs(settings,true).join(' '),/mcp_servers.jarvis-windows.command/);assert.ok(codexArgs(settings,true).includes('workspace-write'));
  assert.ok(codexArgs(settings,true).includes('mcp_servers.jarvis-windows.required=true'));
+ assert.ok(codexArgs(settings,true).includes('approval_policy="on-request"'));
+ assert.ok(codexArgs(settings,true).includes('approvals_reviewer="auto_review"'));
+ assert.ok(!codexArgs(settings,true).includes('approval_policy="never"'));
+ assert.ok(codexArgs(settings).includes('approval_policy="never"'));
+ assert.ok(!codexArgs(settings).includes('approvals_reviewer="auto_review"'));
  assert.match(promptFor({id:'test',workerId:'worker',lease:'lease',plan:native,request:'Open Excel'}),/Computer action mode/);
  assert.match(promptFor({id:'test',workerId:'worker',lease:'lease',plan:plan('In my Chrome, execute this task: edit the spreadsheet'),request:'Edit the spreadsheet'}),/Browser action mode/);
 });

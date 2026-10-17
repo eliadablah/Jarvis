@@ -2,6 +2,11 @@
 
 ## 2026-10-16
 
+### Fix - Review authorized Codex desktop actions
+
+- Codex Computer now requests automatic approval review for native MCP actions. The previous never policy rejected switching to Chrome even after a successful desktop snapshot. Workspace-only Codex tasks retain their existing approval policy.
+- Sandbox and managed permission requirements still apply; denied actions must stop without tool substitution. Regression checks cover the distinct computer and workspace approval modes. Actual application submission remains unverified.
+
 ### Fix - Wait for Codex Windows tools before starting a task
 
 - Made the native MCP server required for Codex computer runs, so it waits for initialization and fails before model execution when the server is unavailable. A live probe discovered all 18 tools; a missing-server probe exited with an initialization error.

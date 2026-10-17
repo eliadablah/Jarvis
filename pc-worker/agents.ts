@@ -50,7 +50,8 @@ export function reportedRun(value: unknown, plan: PcPlan, touchedTools: boolean)
 const schemaPath = fileURLToPath(new URL("./report.schema.json", import.meta.url));
 export function codexArgs(settings?: WorkerSettings, computer = false): string[] {
   return ["exec", "--ignore-user-config", ...(computer ? desktopCodexArgs(settings) : []), "--disable", "apps", "--disable", "browser_use", "--disable", "computer_use",
-    "-c", 'approval_policy="never"', "-c", 'sandbox_mode="workspace-write"', "--sandbox", "workspace-write", "-c", 'web_search="disabled"',
+    ...(computer ? ["-c", 'approval_policy="on-request"', "-c", 'approvals_reviewer="auto_review"'] : ["-c", 'approval_policy="never"']),
+    "-c", 'sandbox_mode="workspace-write"', "--sandbox", "workspace-write", "-c", 'web_search="disabled"',
     "--skip-git-repo-check", "--json", "--output-schema", schemaPath, "-"];
 }
 export function claudeArgs(plan: PcPlan, settings?: WorkerSettings, nativeAgent = false): string[] {
