@@ -22,8 +22,9 @@ function el(tag, className, text) {
   return node;
 }
 
-function shortDate(iso) {
-  const [, month, day] = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso) ?? [];
+/** "2026-10-17" -> "10/17"; anything else -> "". */
+export function shortDate(iso) {
+  const [, , month, day] = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso) ?? [];
   return month ? `${Number(month)}/${Number(day)}` : '';
 }
 

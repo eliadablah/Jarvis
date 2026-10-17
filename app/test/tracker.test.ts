@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { generateKeyPairSync, createVerify } from "node:crypto";
+import { shortDate } from "../public/jobsPanel.js";
 import { TrackerReader, parseRows, readServiceAccount, signJwt, summarize, sortJobs } from "../src/jobs/tracker.ts";
 
 const HEAD = ["Date Applied", "Company", "Role", "Pay", "Location", "Stage", "Next Step / Needs You", "Last Update", "CV Used", "Apply Via", "Posting URL", "Notes"];
@@ -67,4 +68,11 @@ test("reader signs in once, caches, and serves a stale copy if Google fails", as
   time += 11 * 60_000;
   await assert.rejects(reader.snapshot(), /HTTP 500/);
   assert.equal(new TrackerReader({ sheetId: "", range: "", serviceAccountB64: "" }).enabled, false);
+});
+
+test("the dashboard shows tracker dates as month/day", () => {
+  assert.equal(shortDate("2026-10-17"), "10/17");
+  assert.equal(shortDate("2026-01-05"), "1/5");
+  assert.equal(shortDate("10/17/2026"), "");
+  assert.equal(shortDate(""), "");
 });

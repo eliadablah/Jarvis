@@ -2,6 +2,10 @@
 
 ## 2026-10-17
 
+### Fix - Tracker dates on the Job search card
+
+- First live view showed each application's date as "2026/10" (the year was read as the month). It now shows month/day (for example 10/17), with a test covering it. Tests: 87 passing.
+
 ### Feature - Job search section connected to the Google tracker sheet
 
 - The dashboard's Job search section now shows my real pipeline (applied, need me, responses, last 7 days) and a list of recent applications with stage, pay and posting links, read live from the Google Sheets tracker through a new `GET /api/jobs`. It refreshes every two minutes and when the tab regains focus.
