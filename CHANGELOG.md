@@ -2,6 +2,13 @@
 
 ## 2026-10-19
 
+### Fix - Least-used capable provider for PC tasks and real next-workflow time
+
+- PC executor selection now compares fresh Claude/Codex allowance usage after capability/readiness checks. The provider with lower pressure across its active five-hour and weekly windows runs first, for scheduled and explicitly requested tasks. Missing/stale/invalid/expired readings are unknown, not zero; equal/unknown readings preserve existing ordering. The 90% reserve, cooldown and side-effect guards remain.
+- Removed Claude-only workflow wording. The Next workflow card uses the live schedule API rather than a hard-coded 06:00 label. Added a live device-local date/year and clock, explicit 12-hour formatting (1 PM / 3:59 PM) for schedules and reset times, automatic midnight/focus updates, and calendar-day tomorrow handling. Job schedule instants display in the viewing device timezone; execution keeps its configured schedule timezone.
+- Validation: 112 app tests and 38 worker tests, TypeScript and app build. Tests cover both providers winning, weekly bottlenecks, unavailable tools, 90% cutoff, missing/stale/expired readings and ties. Local worker activation is still required for the changed executor code; live UI deployment is tracked in the vault.
+
+
 ### Fix - Codex job files, visible failures and explicit retries
 
 - Fixed the observed four-job run failure: Codex's job adapter had Chrome but no structured local file reader. Added required jarvis-job-files tools for approved job text/skill/history files, resume directory listing and actual PDF text extraction. Confirmed submission logging is URL-idempotent, confined to the existing log, and exposed only for submission tasks. No arbitrary shell, file write or path is exposed.

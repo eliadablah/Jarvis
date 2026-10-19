@@ -1,3 +1,4 @@
+import { formatClock, relativeDay } from "./localTime.js";
 // "On your radar" schedule row: shows Jarvis's own morning job run (from
 // GET /api/schedules) in place of the old "existing Claude schedule" text:
 // when it runs next, what happened last time, and a Pause / Resume button.
@@ -12,10 +13,7 @@ const STATUS = {
 /** "Tue 7:00 AM" for the next run, in the viewer's own clock. */
 export function whenLabel(iso, now = new Date()) {
   const date = new Date(iso);
-  const day = date.toDateString() === now.toDateString() ? 'today'
-    : date.toDateString() === new Date(now.getTime() + 86400000).toDateString() ? 'tomorrow'
-    : date.toLocaleDateString([], { weekday: 'short' });
-  return day + ' ' + date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  return relativeDay(date, now) + ' ' + formatClock(date);
 }
 
 function ago(iso, now = Date.now()) {
@@ -47,10 +45,13 @@ export function startSchedulePanel() {
 
   function render() {
     if (!schedule?.available) return;
-    const [h, m] = schedule.time.split(':').map(Number);
-    timeCell.replaceChildren(document.createTextNode(String(h % 12 || 12) + (m ? ':' + String(m).padStart(2, '0') : ':00')), Object.assign(document.createElement('small'), { textContent: h < 12 ? 'AM' : 'PM' }));
+    const workflowTime = document.querySelector('#next-workflow-time');
+    const workflowNote = document.querySelector('#next-workflow-note');
+    if (workflowTime) workflowTime.textContent = schedule.enabled ? formatClock(new Date(schedule.nextRun)) : 'Paused';
+    if (workflowNote) workflowNote.textContent = 'Jobs · automatic Claude or Codex';
+    timeCell.textContent = formatClock(new Date(schedule.nextRun));
     title.textContent = schedule.label + (schedule.enabled ? '' : ' (paused)');
-    meta.textContent = (schedule.enabled ? 'Next ' + whenLabel(schedule.nextRun) : 'Not running until resumed') + ' · apply to ' + schedule.count + ' jobs · last: ' + lastLabel(schedule.last);
+    meta.textContent = (schedule.enabled ? 'Next ' + whenLabel(schedule.nextRun) : 'Not running until resumed') + ' · apply to ' + schedule.count + ' jobs · Claude or Codex, based on available allowance · last: ' + lastLabel(schedule.last);
     button.textContent = schedule.enabled ? 'Pause' : 'Resume';
     button.hidden = false;
   }

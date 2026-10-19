@@ -10,7 +10,7 @@ const NAMES = { claude: 'Claude', codex: 'Codex' };
 
 function clock(epochSeconds, now) {
   const date = new Date(epochSeconds * 1000);
-  const time = date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  const time = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
   return date.toDateString() === new Date(now).toDateString() ? time : date.toLocaleDateString([], { weekday: 'short' }) + ' ' + time;
 }
 

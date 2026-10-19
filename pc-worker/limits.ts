@@ -20,6 +20,14 @@ import { isStartupCrash } from "./steps.ts";
 const FIVE_HOURS = 300;
 const WEEK = 10080;
 
+/** Comparable allowance pressure, not a claim about raw token counts. Unknown is not zero. */
+export function usagePressure(limits: AgentLimits | undefined, now = Date.now()): number | undefined {
+  const at = limits && Date.parse(limits.updatedAt);
+  if (!limits || !Number.isFinite(at) || now - at! > 35 * 60_000 || at! > now + 5 * 60_000) return;
+  const windows = [limits.fiveHour, limits.week].filter(w => w && Number.isFinite(w.usedPercent) && w.usedPercent >= 0 && w.usedPercent <= 100 && Number.isFinite(w.resetsAt) && w.resetsAt * 1000 > now);
+  return windows.length ? Math.max(...windows.map(w => w!.usedPercent)) : undefined;
+}
+
 /** Fresh, unexpired windows only. Old readings must not strand an otherwise usable provider. */
 export function quotaPressure(limits: AgentLimits | undefined, now = Date.now()): number | undefined {
   if (!limits || now - Date.parse(limits.updatedAt) > 35 * 60_000 || Date.parse(limits.updatedAt) > now + 5 * 60_000) return;

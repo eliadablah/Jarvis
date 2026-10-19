@@ -2,7 +2,7 @@ import { jobFilesCodexArgs } from "./jobFiles.ts";
 import { rufloMcp, rufloCodexArgs, RUFLO_TOOLS, RUFLO_GUIDANCE } from "./ruflo.ts";
 import { desktopMcp, desktopCodexArgs, chromeCodexArgs } from "./desktopConfig.ts";
 import { describeStep, isStartupCrash } from "./steps.ts";
-import { claudeLimitsFromEvent, quotaPressure } from "./limits.ts";
+import { claudeLimitsFromEvent, quotaPressure, usagePressure } from "./limits.ts";
 import { spawn, type ChildProcess } from "node:child_process";
 import { readFile, realpath, mkdtemp, writeFile, open, unlink, rmdir } from "node:fs/promises";
 import { createHash } from "node:crypto";
@@ -37,9 +37,12 @@ export function agentStatuses(settings: WorkerSettings, cooldowns: Cooldowns, no
       ...(wait && wait.until > now ? { retryAt: new Date(wait.until).toISOString() } : {}), remainingTokens: null };
   });
 }
-/** Capabilities first; Codex for local code/files, Claude for signed-in Chrome. */
-export function chooseAgents(plan: PcPlan, statuses: ExecutorStatus[]): string[] {
-  return statuses.filter(e => e.state === "ready" && e.capabilities.includes(capabilityFor(plan))).map(e => e.id);
+/** Capability/availability first, then the provider with the most allowance headroom. */
+export function chooseAgents(plan: PcPlan, statuses: ExecutorStatus[], limits: PcLimits = {}, now = Date.now()): string[] {
+  const score = (id: string) => usagePressure(id.startsWith("claude-") ? limits.claude : id.startsWith("codex-") ? limits.codex : undefined, now);
+  return statuses.filter(e => e.state === "ready" && e.capabilities.includes(capabilityFor(plan)))
+    .map((e,index)=>({id:e.id,index,pressure:score(e.id)}))
+    .sort((a,b)=>(a.pressure ?? Infinity)-(b.pressure ?? Infinity) || a.index-b.index).map(e=>e.id);
 }
 export function refusal(text: string): AgentRun["failure"] {
   if (/quota|rate.?limit|usage.?limit|insufficient_quota|too many requests|(?:HTTP|status|code|response)\W{0,8}429\b|hit your.{0,12}limit/i.test(text)) return "quota";

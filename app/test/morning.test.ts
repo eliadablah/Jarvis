@@ -82,8 +82,8 @@ test("the server queues the morning run once a day, can be paused, and drops sta
 
 test("the dashboard words the next run and the last result", () => {
   const now = new Date(2026, 9, 19, 6, 0);
-  assert.match(whenLabel(new Date(2026, 9, 19, 7, 0).toISOString(), now), /^today 7:00/);
-  assert.match(whenLabel(new Date(2026, 9, 20, 7, 0).toISOString(), now), /^tomorrow 7:00/);
+  assert.match(whenLabel(new Date(2026, 9, 19, 7, 0).toISOString(), now), /^today 7 AM/);
+  assert.match(whenLabel(new Date(2026, 9, 20, 7, 0).toISOString(), now), /^tomorrow 7 AM/);
   assert.equal(lastLabel(undefined), "no run yet");
   const finished = new Date(Date.now() - 2 * 3600_000).toISOString();
   assert.equal(lastLabel({ status: "partial", submitted: 5, createdAt: finished, finishedAt: finished }), "Partly completed · 5 submitted · 2h ago");

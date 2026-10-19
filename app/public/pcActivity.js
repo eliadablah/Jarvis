@@ -103,10 +103,10 @@ export function mountPcActivity({ api, safe, modal, toast, navigate }) {
         report.needsInput.map(s => '<p>Needs you: ' + safe(s) + '</p>').join('') : '') +
       '<small>Evidence is reported by the local agent. Check the linked destination or files for independent confirmation. Cancelling cannot undo completed actions.</small>');
   });
-  document.querySelector('#pc-agents').onclick = () => modal('Your PC agents', '<p>Tasks go to an agent with the required tools. Codex is preferred for code/files; Claude Chrome for browser work. Windows-MCP gives Claude and Codex desktop tools and a browser fallback. Supported app launches need no model.</p>' +
+  document.querySelector('#pc-agents').onclick = () => modal('Your PC agents', '<p>Tasks go to an agent with the required tools. Claude and Codex can handle jobs. Jarvis selects the capable, ready provider with the lowest fresh allowance usage; unknown usage is not treated as zero. Windows-MCP gives Claude and Codex desktop tools and a browser fallback. Supported app launches need no model.</p>' +
     (state.executors || []).map(e => '<div class="model-status"><span class="tag">' + safe(e.state) + '</span><strong>' + safe(e.id) +
       '</strong><p>' + safe(e.reason) + '</p><small>' + safe(e.capabilities.join(', ')) +
-      (e.retryAt ? ' · retry after ' + safe(new Date(e.retryAt).toLocaleTimeString()) : '') + '</small></div>').join('') +
+      (e.retryAt ? ' · retry after ' + safe(new Date(e.retryAt).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true})) : '') + '</small></div>').join('') +
     '<p>Exact remaining tokens are unavailable. Usage-limit refusals pause that agent; Temporary startup failures retry up to three times before actions. Provider fallback happens before actions; workspace quota continuation checks saved progress. Use Try again for stopped tasks; uncertain outcomes need review. Approved folders are configured on your PC.</p>');
   // Every 3 seconds while a task is running (so steps show up live), every 10 otherwise.
   const busy = () => state.tasks.some(t => ['running', 'cancelling'].includes(t.status));

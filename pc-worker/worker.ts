@@ -105,7 +105,7 @@ export async function execute(settings: WorkerSettings, state: LocalState, task:
     const steps: string[] = [];
     const attempted = new Set<string>();
     for (;;) {
-      const id = chooseAgents(task.plan, agentStatuses(settings, state.cooldowns, Date.now(), limits)).find(candidate => !attempted.has(candidate));
+      const id = chooseAgents(task.plan, agentStatuses(settings, state.cooldowns, Date.now(), limits), limits).find(candidate => !attempted.has(candidate));
       if (!id) break;
       attempted.add(id);
       if (controller.signal.aborted) break;

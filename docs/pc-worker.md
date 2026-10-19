@@ -32,7 +32,7 @@ Natural browser requests are normalized on the server to the existing protocol-2
 
 ## Agent choice
 
-- Codex is preferred for approved local workspaces. It runs with workspace-write sandboxing and no approvals, with account apps and browser/desktop tools disabled.
+- Claude and Codex are both eligible for supported tasks. Choose capable, ready adapters first, then the provider with the lowest fresh allowance usage. Compare the highest active five-hour/weekly percentage so the tightest limit is protected. Readings older than 35 minutes, invalid timestamps and expired windows are unknown, never zero. Known fresh readings rank ahead of unknown; ties retain existing adapter order. The 90% pause, cooldown, tool and no-duplicate-action checks still apply. Codex workspaces keep workspace-write sandboxing and scoped MCP approval review.
 - Claude provides workspace file/command fallback with explicitly allowed Bash, while unrelated MCP servers, nested agents and skills remain disabled for that adapter.
 - Claude with Chrome handles browser actions and job tasks. Browser observation and browser execution are separate capabilities; execution can fill forms, edit Sheets, upload requested files, send requested messages and change requested calendar entries. Its login and Chrome extension must be connected. Search, prepare and submit are separate task scopes. Profile and answer-bank files are preloaded with content hashes.
 - Claude Computer and Codex Computer use the pinned Windows-MCP stdio adapter for general desktop tasks. Codex browser/job fallback uses direct Chrome extension tools instead of desktop screen controls. Its browser capability requires both the Codex and Claude executables; desktop capability requires Codex and Windows-MCP. Registry tooling is not exposed. Platform sandbox profiles are preserved.
@@ -190,3 +190,8 @@ The dashboard shows Why it stopped and a Try again button for terminal stopped/p
 Transient launch/connection failures before any possible action retry up to three attempts with backoff. Real access/approval denials do not retry or route around restrictions. Authentication, quota and missing-answer problems need their specific resolution. Explicit commands authorize the scoped work without another generic confirmation; full permission cannot change Windows or managed policy. Unknown interrupted submissions still need a result check.
 
 Live check: the fixed Codex adapter successfully read documents/applications/log.md and extracted the actual Master-Resume.pdf (3 pages). It performed no browser activity, job submission or file edit. The long-running worker still needs activation because this session's process inspection is denied.
+
+
+The Next workflow card reads the actual job schedule from /api/schedules. It does not hard-code 06:00 or describe a Claude-only plan. Scheduled tasks use the same least-used capable-provider selection as explicit PC tasks. The server chat engine chooser is separate; this change applies to the PC executor.
+
+The dashboard date and clock use the device local timezone and refresh while open or on returning to the app. Times explicitly use 12-hour AM/PM, regardless of the device locale default. Schedule nextRun is an absolute instant displayed in the viewing device timezone, including its correct local day. Schedule execution still uses its configured timezone (Dallas by default); display changes do not move the scheduled job.
