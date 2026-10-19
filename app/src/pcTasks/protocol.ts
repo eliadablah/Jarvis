@@ -14,7 +14,7 @@ export interface Evidence { action: string; target: string; detail: string }
 export interface PcReport { outcome: Outcome; summary: string; evidence: Evidence[]; needsInput: string[]; submitted: number }
 export interface ExecutorStatus {
   id: string; capabilities: Capability[]; state: "ready" | "cooldown" | "unavailable";
-  features?: ("job-files-v1")[];
+  features?: ("job-files-v1" | "task-sync-v1")[];
   reason: string; retryAt?: string; remainingTokens: null;
 }
 export function capabilityFor(plan: PcPlan): Capability { return plan.kind === "desktop" ? "desktop.launch" : plan.kind === "browser" && plan.action === "execute" ? "browser.execute" : plan.kind; }
@@ -60,7 +60,7 @@ export function validateReport(value: unknown, plan: PcPlan): PcReport {
     report.needsInput.push("The agent did not provide evidence that the requested action happened.");
   }
   if (plan.kind === "jobs" && plan.action === "submit" && report.outcome === "completed" && !report.submitted) {
-    report.outcome = "needs_input"; report.needsInput.push("No applications were confirmed submitted.");
+    report.outcome = "needs_input"; report.needsInput.push("No new submissions were verified for this task. Unrelated historical applications do not count toward this request.");
   }
   if (report.outcome === "completed" && report.needsInput.length) report.outcome = report.evidence.length ? "partial" : "needs_input";
   if (plan.kind === "jobs" && plan.action === "submit" && report.outcome === "completed" && report.submitted < plan.maxApplications) report.outcome = "partial";

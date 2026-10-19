@@ -195,3 +195,14 @@ Live check: the fixed Codex adapter successfully read documents/applications/log
 The Next workflow card reads the actual job schedule from /api/schedules. It does not hard-code 06:00 or describe a Claude-only plan. Scheduled tasks use the same least-used capable-provider selection as explicit PC tasks. The server chat engine chooser is separate; this change applies to the PC executor.
 
 The dashboard date and clock use the device local timezone and refresh while open or on returning to the app. Times explicitly use 12-hour AM/PM, regardless of the device locale default. Schedule nextRun is an absolute instant displayed in the viewing device timezone, including its correct local day. Schedule execution still uses its configured timezone (Dallas by default); display changes do not move the scheduled job.
+
+
+## Task scope, submission receipts and live dashboard updates
+
+Task claims include the root request ID, original requested count and distinct confirmation URLs from that request/retry family. Application-history rows from another run do not fulfill a new quota. Pending receipts from an attempt count toward its retry budget, even if the agent's final report under-counted them.
+
+Both job adapters receive the task-bound log/receipt tool. Call it after each observed new confirmation, not at batch end. A private durable outbox is saved before network delivery. The authenticated submission endpoint verifies the worker lease and submission plan, caps receipts, and deduplicates normalized URLs. Failed delivery is retried without repeating application actions. Server receipts are task observations; do not call a task created or a form filled a confirmed application.
+
+The dashboard maintains an SSE connection at /api/live. Change notifications carry only topic/time; the browser reads its own current state. Job and PC panels refresh on events and reconnect. New local receipts appear immediately with Google sync pending; Google reads run separately, with stale/unavailable indicators. The 30-second fallback polling is for missed/external changes. This is best-effort low latency, not a zero-latency guarantee or automatic live sharing of every AI's internal conversation.
+
+Google writes remain disabled pending the user's exact payload/Editor approval after automatic review rejected that integration. Existing Google reads retain spreadsheets.readonly and Viewer access. The proposed provider-wide shared tracker tool is also disabled pending approval. A pending receipt becomes synced only after the submitted URL is observed in the sheet. The task-sync-v1 worker feature gates new retries; activate the current idle worker using the existing activate-job-files.ps1 helper from normal PowerShell.

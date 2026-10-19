@@ -23,7 +23,7 @@ test("explicit retries are idempotent and submit only the remaining count",async
   assert.deepEqual(parsePcIntent(a!.request),{type:"task",plan:a!.plan});
   assert.match(a!.request,/Remote support only/);assert.match(a!.request,/Skip completed actions/);
   assert.equal(await claimNextPcTask(dir,worker,[{id:"codex-computer",state:"ready",reason:"ready",remainingTokens:null,capabilities:["jobs"]}]),undefined);
-  const updated=await claimNextPcTask(dir,worker,[{id:"codex-computer",state:"ready",reason:"ready",remainingTokens:null,capabilities:["jobs"],features:["job-files-v1"]}]);
+  const updated=await claimNextPcTask(dir,worker,[{id:"codex-computer",state:"ready",reason:"ready",remainingTokens:null,capabilities:["jobs"],features:["job-files-v1","task-sync-v1"]}]);
   assert.equal(updated!.id,a!.id);
  }finally{await rm(dir,{recursive:true,force:true});}
 });

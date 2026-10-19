@@ -4,7 +4,7 @@ export function failureMessage(task) {
   if (!['needs_input','failed','partial','needs_attention','cancelled'].includes(task.status)) return '';
   const needs = task.report?.needsInput || [];
   const evidence = task.report?.evidence || [];
-  const reason = needs[0] || evidence.find(e => /denied|blocked|attempted_read|error/i.test(e.action))?.detail || task.report?.summary || task.result || task.progress;
+  const reason = needs.find(s=>!/^No (?:new submissions|applications were confirmed)/i.test(s)) || evidence.find(e => /denied|blocked|attempted_read|error/i.test(e.action))?.detail || task.report?.summary || task.result || task.progress;
   return reason || 'The agent stopped without a specific reason. Review Details before trying again.';
 }
 export function canRetryTask(task) {
@@ -66,7 +66,7 @@ export function mountPcActivity({ api, safe, modal, toast, navigate }) {
       document.querySelector('#pc-agents-summary').textContent = ready.length+' agents · browser actions '+(ready.some(e=>e.capabilities.includes('browser.execute'))?'ready':'needs update')+' · Windows '+(ready.some(e=>e.capabilities.includes('computer'))?'ready':'needs setup');
       const html = state.tasks.length ? state.tasks.slice(0, 12).map(task =>
         '<article class="pc-task" data-status="' + safe(task.status) + '"><div class="pc-task-top"><span class="tag">' + safe(labels[task.status] || task.status) +
-        '</span><small>' + safe(task.executor || task.plan?.kind || 'PC') + '</small></div><h3>' + safe(task.request) + '</h3>' + (liveBlock(task) || '<p>' +
+        '</span><small>' + safe(task.executor || task.plan?.kind || 'PC') + '</small></div><h3>' + safe(task.request) + '</h3>' + (task.confirmedThisTask ? '<p>' + safe(task.confirmedThisTask) + ' new confirmations recorded for this task.</p>' : '') + (liveBlock(task) || '<p>' +
         safe((task.progress || task.result || 'Waiting for a capable local agent.').slice(0,220)) + '</p>') + (failureMessage(task) ? '<div class="pc-failure"><strong>Why it stopped</strong><p>' + safe(failureMessage(task)) + '</p><small>' + (task.status==='needs_attention' ? 'The outcome is uncertain. Check the destination before repeating it.' : 'Try again checks existing work first. Access restrictions or missing answers may still need resolving.') + '</small></div>' : '') + '<div class="pc-task-actions"><button class="text-btn" data-pc-report="' +
         safe(task.id) + '">Details</button>' + (canRetryTask(task) ? '<button class="text-btn" data-pc-retry="' + safe(task.id) + '">Try again' + (task.plan.kind==='jobs' && task.report?.submitted ? ' · remaining only' : '') + '</button>' : '') + (['queued','running'].includes(task.status) ? '<button class="text-btn" data-pc-cancel="' +
         safe(task.id) + '">Cancel task</button>' : '') + '</div></article>').join('') :
@@ -111,6 +111,7 @@ export function mountPcActivity({ api, safe, modal, toast, navigate }) {
   // Every 3 seconds while a task is running (so steps show up live), every 10 otherwise.
   const busy = () => state.tasks.some(t => ['running', 'cancelling'].includes(t.status));
   (function poll() { setTimeout(async () => { if (!document.hidden) await refresh(); poll(); }, busy() ? 3000 : 10000); })();
+  document.addEventListener("jarvis:pc-updated",()=>{void refresh();});
   void refresh();
   document.addEventListener('visibilitychange', () => { if (!document.hidden) void refresh(); });
   return { refresh, open: () => navigate('pc') };

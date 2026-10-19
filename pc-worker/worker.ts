@@ -1,3 +1,4 @@
+import { flushReceipts } from "./submissionOutbox.ts";
 // Windows PC execution loop. Protocol 2 prevents old, unscoped workers from claiming new tasks.
 import { appendFile, readFile, mkdir, access } from "node:fs/promises";
 import { homedir } from "node:os";
@@ -60,6 +61,7 @@ export function validateClaim(value: unknown, workerId: string): ClaimedTask {
 }
 export async function deliverReport(settings: WorkerSettings, state: LocalState): Promise<void> {
   const item = state.outbox; if (!item) return;
+  await flushReceipts(STATE_DIR,settings,item.task).catch(()=>{});
   const response = await call(settings, "/api/pc/tasks/" + item.task.id + "/result", {
     workerId: state.workerId, lease: item.task.lease, reportId: item.reportId, report: item.report,
   });
@@ -86,7 +88,10 @@ export async function execute(settings: WorkerSettings, state: LocalState, task:
   const refresh = dependencies.refresh ?? refreshLimits;
   const controller = new AbortController();
   let progress = "Choosing a capable agent.", executor: string | undefined, lastContact = Date.now(), finished = false, lastBeat = 0;
+  let syncing=false;
+  const sync=async()=>{if(syncing)return;syncing=true;try{await flushReceipts(STATE_DIR,settings,task);}catch{}finally{syncing=false;}};
   const heartbeat = async () => {
+    await sync();
     lastBeat = Date.now();
     try {
       const response = await call(settings, "/api/pc/tasks/" + task.id + "/heartbeat",
@@ -117,6 +122,7 @@ export async function execute(settings: WorkerSettings, state: LocalState, task:
         if (steps.at(-1) !== text) { steps.push(text.slice(0, 300)); if (steps.length > 12) steps.shift(); }
         if (!finished && Date.now() - lastBeat >= 2000) void heartbeat();
       }, undefined, reading => { limits.claude = newerLimits(limits.claude, reading); }, continuation);
+      await sync();
       result = run.report;
       if (run.failure) {
         const wait = { until: Date.now() + (run.failure === "quota" ? 15 * 60_000 : 60_000), reason: run.report.summary };

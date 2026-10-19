@@ -2,7 +2,9 @@ import { readFile, readdir, realpath, stat, appendFile } from "node:fs/promises"
 import { relative, isAbsolute, join, extname } from "node:path";
 import { createInterface } from "node:readline";
 import { pathToFileURL } from "node:url";
-export interface JobRoots { jobs: string; resumes: string; pdfRuntime?: string; allowLogWrite?: boolean }
+import {homedir} from "node:os";
+import {queueReceipt,flushReceipts,type ReceiptInput} from "./submissionOutbox.ts";
+export interface JobRoots { jobs: string; resumes: string; pdfRuntime?: string; allowLogWrite?: boolean; publishReceipt?:(value:ReceiptInput)=>Promise<void> }
 export async function scopedJobPath(roots: JobRoots, source: unknown, path: unknown): Promise<string> {
   if ((source !== "jobs" && source !== "resumes") || typeof path !== "string" || path.length > 500 || isAbsolute(path) || path.includes(":")) throw new Error("Use a relative path inside jobs or resumes.");
   const parts = path.replace(/\\/g,"/").split("/");
@@ -22,8 +24,10 @@ export async function jobFileCall(roots: JobRoots, name: string, args: Record<st
     const path=await scopedJobPath(roots,"jobs","documents/applications/log.md");
     const existing=await readFile(path,"utf8");
     if(existing.includes(String(url))) return {saved:false,alreadyLogged:true};
+    let syncPending=false;
+    if(roots.publishReceipt){try{await roots.publishReceipt({company:String(company),role:String(role),url:String(url),confirmation:String(confirmation)});}catch{syncPending=true;}}
     await appendFile(path,"\n- "+JSON.stringify({date:new Date().toISOString(),company,role,url,confirmation})+"\n","utf8");
-    return {saved:true,path:"documents/applications/log.md"};
+    return {saved:true,path:"documents/applications/log.md",...(roots.publishReceipt?{syncPending}: {})};
   }
   if (!["read_text","read_pdf","list_files"].includes(name)) throw new Error("Tool is not enabled.");
   const path=await scopedJobPath(roots,args.source,args.path);
@@ -51,6 +55,15 @@ export const JOB_TOOLS=[
 ];
 if(import.meta.main){
  const roots={jobs:process.env.JARVIS_JOBS_ROOT!,resumes:process.env.JARVIS_RESUMES_ROOT!,pdfRuntime:process.env.JARVIS_PDF_RUNTIME,allowLogWrite:process.env.JARVIS_JOB_ACTION==="submit"};
+ const configured:JobRoots={...roots,publishReceipt:async value=>{
+   const dir=join(homedir(),".jarvis"), taskId=process.env.JARVIS_TASK_ID??"";
+   await queueReceipt(dir,taskId,value);
+   // Credentials are consumed only inside this deterministic adapter, never returned to the model.
+   const settings=JSON.parse((await readFile(join(dir,"pc-worker.json"),"utf8")).replace(/^\uFEFF/,""));
+   const state=JSON.parse(await readFile(join(dir,"pc-worker-state.json"),"utf8"));
+   if(state.active?.id!==taskId)throw Error("No matching active submission task.");
+   await flushReceipts(dir,settings,state.active);
+ }};
  for await(const line of createInterface({input:process.stdin,crlfDelay:Infinity})){
   let req;try{if(line.length>16000)throw new Error();req=JSON.parse(line);}catch{continue;}
   if(req.id===undefined)continue;
@@ -59,7 +72,7 @@ if(import.meta.main){
   else if(req.method==="ping")result={};
   else if(req.method==="tools/list")result={tools:JOB_TOOLS.filter(t=>t.name!=="append_application_log"||roots.allowLogWrite)};
   else if(req.method==="tools/call"){
-   try{result={content:[{type:"text",text:JSON.stringify(await jobFileCall(roots,req.params?.name,req.params?.arguments??{}))}]};}
+   try{result={content:[{type:"text",text:JSON.stringify(await jobFileCall(configured,req.params?.name,req.params?.arguments??{}))}]};}
    catch(e){result={isError:true,content:[{type:"text",text:e instanceof Error?e.message:"Job file operation failed."}]};}
   }else{process.stdout.write(JSON.stringify({jsonrpc:"2.0",id:req.id,error:{code:-32601,message:"Method not supported"}})+"\n");continue;}
   process.stdout.write(JSON.stringify({jsonrpc:"2.0",id:req.id,result})+"\n");

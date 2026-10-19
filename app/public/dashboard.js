@@ -1,3 +1,4 @@
+import { startLiveUpdates } from "./liveUpdates.js";
 import { formatClock, formatLocalDate } from "./localTime.js";
 import { mountPcActivity } from './pcActivity.js';
 import { startJobsPanel } from './jobsPanel.js';
@@ -155,3 +156,4 @@ $('#transcript').innerHTML='<p class="brief-line">Ask Jarvis a question, add a t
 const pcActivity=mountPcActivity({api,safe,modal,toast,navigate});
 startJobsPanel();
 startSchedulePanel();
+startLiveUpdates();

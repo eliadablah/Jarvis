@@ -6,6 +6,8 @@ import { dashboardDir } from "../dashboard.ts";
 import { appHeaders } from "../http/securityHeaders.ts";
 import { PC_PROTOCOL, CAPABILITIES, sanitizeLimits, type ExecutorStatus } from "./protocol.ts";
 import { claimNextPcTask, finishPcTask, heartbeatPcTask, cancelPcTask, retryPcTask, pcSnapshot, publicTask, setPcLimits, workerOnline, type PcTask } from "./store.ts";
+import {recordSubmission,readSubmissions} from "../jobs/submissions.ts";
+import {publishUpdate} from "../live.ts";
 function json(res: ServerResponse, status: number, value?: unknown): void {
   res.writeHead(status, { ...appHeaders(), "Content-Type": "application/json", "Cache-Control": "no-store" });
   res.end(value === undefined ? undefined : JSON.stringify(value));
@@ -28,7 +30,7 @@ function executorsOf(value: unknown): ExecutorStatus[] {
     /^[a-z-]{1,60}$/.test(e.id) && ["ready", "cooldown", "unavailable"].includes(e.state) &&
     typeof e.reason === "string" && e.reason.length <= 300 && e.remainingTokens === null &&
     (e.retryAt === undefined || typeof e.retryAt === "string" && Number.isFinite(Date.parse(e.retryAt))) &&
-    (e.features === undefined || Array.isArray(e.features) && e.features.length <= 1 && e.features.every((f: unknown) => f === "job-files-v1")) &&
+    (e.features === undefined || Array.isArray(e.features) && e.features.length <= 2 && e.features.every((f: unknown) => f === "job-files-v1" || f === "task-sync-v1")) &&
     Array.isArray(e.capabilities) && e.capabilities.length <= 4 && e.capabilities.every((c: string) => CAPABILITIES.includes(c as typeof CAPABILITIES[number]))))
     throw new ChatRequestError(400, "Invalid agent capabilities.");
   return value;
@@ -38,11 +40,12 @@ export async function handlePcTasks(req: IncomingMessage, res: ServerResponse, p
   try {
     if (path === "/api/pc/tasks" && (method === "GET" || method === "HEAD")) {
       const state = await pcSnapshot(dir);
+      const receipts=await readSubmissions(dir);
       json(res, 200, { protocol: PC_PROTOCOL, enabled: Boolean(config.pcWorkerToken), workerOnline: workerOnline(state), workerSeenAt: state.workerSeenAt,
-        executors: state.executors ?? [], limits: state.limits ?? {}, tasks: state.tasks.slice(-100).reverse().map(publicTask) }); return;
+        executors: state.executors ?? [], limits: state.limits ?? {}, tasks: state.tasks.slice(-100).reverse().map(task=>({...publicTask(task),confirmedThisTask:receipts.filter(r=>r.taskId===task.id).length})) }); return;
     }
     if (method !== "POST") { json(res, 405, { error: "Method not allowed" }); return; }
-    const match = /^\/api\/pc\/tasks\/([0-9a-f-]{36})\/(result|heartbeat|cancel|retry)$/.exec(path);
+    const match = /^\/api\/pc\/tasks\/([0-9a-f-]{36})\/(result|heartbeat|cancel|retry|submission)$/.exec(path);
     if (match?.[2] === "retry") {
       checkRequestSource(req.headers); await bodyOf(req);
       if (!config.pcWorkerToken) { json(res,409,{error:"PC worker is not enabled."}); return; }
@@ -72,10 +75,17 @@ export async function handlePcTasks(req: IncomingMessage, res: ServerResponse, p
       if (task) json(res, 200, { task }); else json(res, 204); return;
     }
     if (!match || !uuid(body.lease)) throw new ChatRequestError(400, "Invalid task claim.");
+    if(match[2]==="submission"){
+      const state=await pcSnapshot(dir);const task=state.tasks.find(t=>t.id===match[1]&&t.workerId===body.workerId&&t.lease===body.lease);
+      if(!task||task.plan?.kind!=="jobs"||task.plan.action!=="submit"){json(res,409,{error:"Submission does not belong to an authorized job task."});return;}
+      try{const receipt=await recordSubmission(dir,task.id,task.plan.maxApplications,body.submission);json(res,200,{accepted:true,id:receipt.id,sync:receipt.sync});}
+      catch(e){json(res,400,{error:e instanceof Error?e.message:"Invalid submission receipt."});}return;
+    }
     if (match[2] === "heartbeat") {
       if (typeof body.progress !== "string" || body.progress.length > 300 || (body.executor !== undefined && typeof body.executor !== "string"))
         throw new ChatRequestError(400, "Invalid progress.");
       const state = await heartbeatPcTask(dir, match[1]!, body.workerId, body.lease, body.progress, body.executor as string | undefined);
+      if(state)publishUpdate("pc");
       json(res, state ? 200 : 409, state ?? { error: "Claim no longer active. Stop execution." }); return;
     }
     if (!uuid(body.reportId)) throw new ChatRequestError(400, "Invalid report ID.");
@@ -83,6 +93,7 @@ export async function handlePcTasks(req: IncomingMessage, res: ServerResponse, p
     try { task = await finishPcTask(dir, match[1]!, body.workerId, body.lease, body.reportId, body.report); }
     catch { throw new ChatRequestError(400, "Invalid structured task report."); }
     json(res, task ? 200 : 409, task ? { task: publicTask(task) } : { error: "Claim does not own this task." });
+    if(task){publishUpdate("pc");publishUpdate("jobs");}
   } catch (e) {
     if (e instanceof ChatRequestError) json(res, e.status, { error: e.message });
     else { console.error("PC task storage failed"); json(res, 500, { error: "Could not save. Please try again." }); }

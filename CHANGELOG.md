@@ -2,6 +2,16 @@
 
 ## 2026-10-19
 
+### Fix - Task-scoped application counts and pushed dashboard updates
+
+- Fixed the retry confusing five October 18 applications with a new four-job request. Task claims now include only their original request/retry-family confirmations and budget. Unrelated history is a duplicate check, not task completion. Retry caps also include durable receipts from the same attempt.
+- Added authenticated, task/lease-bound submission receipts, per-task caps, URL deduplication and durable PC-to-Jarvis delivery. Both provider job adapters expose the existing confirmation-log tool with task identity; a verified confirmation is published as soon as logged. Failed sync retries receipt delivery, never application submission. Final reports reconcile with receipts rather than hiding confirmations behind an incorrect zero report.
+- Added same-origin server-sent dashboard updates, immediate job/PC refresh on change, a 30-second fallback poll, and local receipt overlays. Google-pending rows/counts appear separately from confirmed Google sync. Google read cache can refresh in the background so new local receipts need not wait on Google. Live clients reconnect normally across deployments.
+- New job retries require task-sync-v1, so older workers wait for activation instead of repeating the history-count bug. Failure cards preserve meaningful explanations rather than always showing a generic zero-submission message.
+- Validation: 116 app/39 worker tests and TypeScript/build checks. Tests cover unrelated history, retry receipts, task ownership/lease/cap enforcement, duplicate acknowledgements, offline receipt recovery, merged counts and a pushed live event without polling. No real job application or synthetic tracker row was submitted.
+- Google writes and a proposed global tracker-read tool for AI providers were blocked by automatic approval review pending exact payload/permission approval. They are not enabled. The service account remains Viewer; no OAuth write scope or new provider-wide tracker tool was added. Dashboard shows Google sync pending until a row is independently read from the existing sheet.
+
+
 ### Fix - Least-used capable provider for PC tasks and real next-workflow time
 
 - PC executor selection now compares fresh Claude/Codex allowance usage after capability/readiness checks. The provider with lower pressure across its active five-hour and weekly windows runs first, for scheduled and explicitly requested tasks. Missing/stale/invalid/expired readings are unknown, not zero; equal/unknown readings preserve existing ordering. The 90% reserve, cooldown and side-effect guards remain.

@@ -134,6 +134,7 @@ export class TrackerReader {
   }
 
   get enabled(): boolean { return Boolean(this.config.sheetId && this.config.serviceAccountB64); }
+  get cachedSnapshot(): TrackerSnapshot | undefined { return this.cache && this.now()-this.cache.at<STALE_MS ? {...this.cache.snapshot,...(this.now()-this.cache.at>CACHE_MS?{stale:true}: {})} : undefined; }
 
   private async accessToken(): Promise<string> {
     if (this.token && this.token.until > this.now()) return this.token.value;
@@ -162,8 +163,8 @@ export class TrackerReader {
   }
 
   /** Cached for a minute; falls back to the last good copy for ten minutes if Google fails. */
-  async snapshot(): Promise<TrackerSnapshot> {
-    if (this.cache && this.now() - this.cache.at < CACHE_MS) return this.cache.snapshot;
+  async snapshot(fresh = false): Promise<TrackerSnapshot> {
+    if (!fresh && this.cache && this.now() - this.cache.at < CACHE_MS) return this.cache.snapshot;
     try {
       const snapshot = await this.fetchSnapshot();
       this.cache = { at: this.now(), snapshot };

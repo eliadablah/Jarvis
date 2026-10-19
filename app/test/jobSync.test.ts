@@ -1,0 +1,58 @@
+import {test} from "node:test";
+import assert from "node:assert/strict";
+import {mkdtemp,rm} from "node:fs/promises";
+import {tmpdir} from "node:os";
+import {join} from "node:path";
+import {randomUUID} from "node:crypto";
+import {createServer} from "node:http";
+import {recordSubmission,readSubmissions} from "../src/jobs/submissions.ts";
+import {enqueuePcTask,claimNextPcTask,finishPcTask,retryPcTask} from "../src/pcTasks/store.ts";
+import {mergeSubmissionView} from "../src/jobs/api.ts";
+import {summarize} from "../src/jobs/tracker.ts";
+import {handlePcTasks} from "../src/pcTasks/api.ts";
+import {loadConfig} from "../src/config.ts";
+import {handleLive,publishUpdate,closeLiveClients} from "../src/live.ts";
+const agents=[{id:"codex-computer",state:"ready" as const,reason:"ready",remainingTokens:null,capabilities:["jobs" as const],features:["job-files-v1" as const,"task-sync-v1" as const]}];
+const receipt=(n:number)=>({company:"Example "+n,role:"Support",url:"https://example.com/jobs/"+n,confirmation:"Application received"});
+test("old submission history does not fulfill a new task; retry reads only its own receipts",async()=>{
+ const dir=await mkdtemp(join(tmpdir(),"jarvis-scope-"));try{
+  const old=await enqueuePcTask(dir,"Apply to 5 job applications");const worker=randomUUID();const oldClaim=await claimNextPcTask(dir,worker,agents);
+  for(let i=0;i<5;i++)await recordSubmission(dir,old.id,5,receipt(i));
+  await finishPcTask(dir,old.id,worker,oldClaim!.lease!,randomUUID(),{outcome:"completed",summary:"Five prior jobs",submitted:5,needsInput:[],evidence:Array.from({length:5},(_,i)=>({action:"submitted",target:receipt(i).url,detail:"Confirmed"}))});
+  const current=await enqueuePcTask(dir,"Apply to 4 job applications");const currentClaim=await claimNextPcTask(dir,worker,agents);
+  assert.equal(currentClaim!.applicationScope!.confirmedUrls.length,0);assert.equal(currentClaim!.applicationScope!.requested,4);
+  await recordSubmission(dir,current.id,4,receipt(6));
+  await finishPcTask(dir,current.id,worker,currentClaim!.lease!,randomUUID(),{outcome:"needs_input",summary:"Stopped",submitted:0,needsInput:[],evidence:[]});
+  const retry=await retryPcTask(dir,current.id);assert.deepEqual(retry!.plan,{kind:"jobs",action:"submit",maxApplications:3});
+  const claim=await claimNextPcTask(dir,worker,agents);assert.deepEqual(claim!.applicationScope!.confirmedUrls,[receipt(6).url]);
+ }finally{await rm(dir,{recursive:true,force:true});}
+});
+test("receipt endpoint checks owner/lease, persists once and enforces the task cap",async()=>{
+ const dir=await mkdtemp(join(tmpdir(),"jarvis-receipt-"));const prior=process.env.JARVIS_DATA_DIR;process.env.JARVIS_DATA_DIR=dir;
+ const config=loadConfig({PC_WORKER_TOKEN:"test"});const server=createServer((req,res)=>{void handlePcTasks(req,res,new URL(req.url!,"http://localhost").pathname,config);});
+ try{
+  await new Promise<void>(r=>server.listen(0,"127.0.0.1",r));const addr=server.address();assert.ok(addr&&typeof addr==="object");
+  const task=await enqueuePcTask(dir,"Apply to 1 job applications");const worker=randomUUID();const claim=await claimNextPcTask(dir,worker,agents);
+  const url="http://127.0.0.1:"+addr.port+"/api/pc/tasks/"+task.id+"/submission";
+  const send=(lease:string,value=receipt(1))=>fetch(url,{method:"POST",headers:{Authorization:"Bearer test","Content-Type":"application/json"},body:JSON.stringify({protocol:2,workerId:worker,lease,submission:value})});
+  assert.equal((await send(randomUUID())).status,409);
+  const a=await send(claim!.lease!);assert.equal(a.status,200);const first=await a.json();
+  const duplicate=await(await send(claim!.lease!)).json();assert.equal(first.id,duplicate.id);
+  assert.equal((await send(claim!.lease!,receipt(2))).status,400);assert.equal((await readSubmissions(dir)).length,1);
+ }finally{server.closeAllConnections();await new Promise<void>(r=>server.close(()=>r()));if(prior===undefined)delete process.env.JARVIS_DATA_DIR;else process.env.JARVIS_DATA_DIR=prior;await rm(dir,{recursive:true,force:true});}
+});
+test("dashboard overlays pending receipts without double-counting a tracker row",()=>{
+ const old={company:"Example 1",role:"Support",url:receipt(1).url,stage:"Needs answer",applied:"2026-10-19",updated:"2026-10-19",nextStep:"",pay:"",location:"",via:""};
+ const base={summary:summarize([old]),jobs:[old],updatedAt:new Date().toISOString()};
+ const record={...receipt(1),id:"test",taskId:"test",at:new Date().toISOString(),sync:"pending" as const};
+ const view=mergeSubmissionView(base,[record,record]);
+ assert.equal(view.summary.total,1);assert.equal(view.summary.submitted,1);assert.equal(view.summary.needsYou,0);assert.equal(view.jobs[0]!.nextStep,"Google sync pending");
+});
+test("live connection receives a pushed update without waiting for a poll",async()=>{
+ const server=createServer(handleLive);const controller=new AbortController();
+ try{await new Promise<void>(r=>server.listen(0,"127.0.0.1",r));const addr=server.address();assert.ok(addr&&typeof addr==="object");
+  const response=await fetch("http://127.0.0.1:"+addr.port,{signal:controller.signal});assert.match(response.headers.get("content-type")!,/text\/event-stream/);
+  const reader=response.body!.getReader();assert.match(new TextDecoder().decode((await reader.read()).value),/ready/);
+  publishUpdate("jobs");assert.match(new TextDecoder().decode((await reader.read()).value),/jobs/);await reader.cancel();
+ }finally{controller.abort();closeLiveClients();server.closeAllConnections();await new Promise<void>(r=>server.close(()=>r()));}
+});

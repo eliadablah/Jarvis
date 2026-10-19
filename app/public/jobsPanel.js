@@ -7,7 +7,7 @@
 // textContent, never as HTML. If the tracker isn't connected the card keeps
 // its original "Tracker not connected" text.
 
-const REFRESH_MS = 2 * 60_000;
+const REFRESH_MS = 30_000;
 const PREVIEW_ROWS = 6;
 
 const STAGE_CLASS = {
@@ -67,11 +67,11 @@ export function startJobsPanel() {
     }
     const s = data.summary;
     pipeline.replaceChildren(step(s.submitted, 'Applied'), step(s.needsYou, 'Need you'), step(s.responses, 'Responses'), step(s.last7Days, 'Last 7 days'));
-    if (tag) tag.textContent = 'Live from your tracker';
+    if (tag) tag.textContent = data.pendingGoogleSync ? data.pendingGoogleSync + ' Google sync pending' : 'Live from your tracker';
 
     const head = el('div', 'job-list-head');
     const updated = new Date(data.updatedAt);
-    head.append(el('small', '', `${s.total} tracked · ${s.today} today${data.stale ? ' · showing saved copy' : ''} · updated ${updated.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`));
+    head.append(el('small', '', `${s.total} tracked · ${s.today} today${data.stale ? ' · showing saved copy' : ''} · updated ${updated.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit',hour12:true })}`));
     if (data.sheetUrl) {
       const open = el('a', 'job-sheet-link', 'Open tracker ↗');
       open.href = data.sheetUrl; open.target = '_blank'; open.rel = 'noopener noreferrer';
@@ -87,15 +87,18 @@ export function startJobsPanel() {
     }
   }
 
-  async function refresh() {
+  let refreshing=false,refreshAgain=false;
+  async function refresh(fresh = false) {
+    if(refreshing){refreshAgain ||= fresh;return;}refreshing=true;
     try {
-      const res = await fetch('/api/jobs', { cache: 'no-store' });
+      const res = await fetch('/api/jobs' + (fresh ? '?fresh=1' : ''), { cache: 'no-store' });
       if (!res.ok) return;
       data = await res.json();
       render();
-    } catch { /* offline: keep what is showing */ }
+    } catch { /* offline: keep what is showing */ } finally {refreshing=false;if(refreshAgain){refreshAgain=false;void refresh(true);}}
   }
 
+  document.addEventListener("jarvis:jobs-updated",()=>{void refresh(true);});
   refresh();
   setInterval(() => { if (!document.hidden) refresh(); }, REFRESH_MS);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });

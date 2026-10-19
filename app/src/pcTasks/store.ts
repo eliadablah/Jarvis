@@ -1,3 +1,4 @@
+import {readSubmissions} from "../jobs/submissions.ts";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -13,7 +14,8 @@ export interface PcTask {
   activity?: { at: string; text: string }[];
   cancelRequested?: boolean; report?: PcReport; reportId?: string; requestId?: string;
   retryOf?: string; retryTaskId?: string;
-  requiredFeature?: "job-files-v1";
+  requiredFeature?: "job-files-v1" | "task-sync-v1";
+  applicationScope?: {rootTaskId:string;requested:number;confirmedUrls:string[];startedAt:string};
 }
 export const MAX_ACTIVITY = 12;
 export interface PcTaskState { tasks: PcTask[]; workerSeenAt?: string; workerId?: string; executors?: ExecutorStatus[]; limits?: PcLimits; }
@@ -37,10 +39,10 @@ function expire(state: PcTaskState, now: Date): void {
     }
   }
 }
-async function mutate<T>(dir: string, change: (state: PcTaskState) => T, now = new Date()): Promise<T> {
+async function mutate<T>(dir: string, change: (state: PcTaskState) => T | Promise<T>, now = new Date()): Promise<T> {
   const run = async () => {
     const state = await readPcTasks(dir); expire(state, now);
-    const value = change(state);
+    const value = await change(state);
     const recent = new Set(state.tasks.filter(t => !active(t)).slice(-100).map(t => t.id));
     state.tasks = state.tasks.filter(t => active(t) || recent.has(t.id));
     await mkdir(dir, { recursive: true, mode: 0o700 });
@@ -69,7 +71,7 @@ export function enqueuePcTask(dir: string, request: string, requestId?: string, 
 }
 /** A new explicit user retry is a separate run, idempotent for the original task. */
 export function retryPcTask(dir: string, id: string, now = new Date()): Promise<PcTask | undefined> {
-  return mutate(dir, state => {
+  return mutate(dir, async state => {
     const source = state.tasks.find(t => t.id === id);
     if (!source) return;
     const existing = state.tasks.find(t => t.retryOf === id);
@@ -78,7 +80,9 @@ export function retryPcTask(dir: string, id: string, now = new Date()): Promise<
     if (state.tasks.filter(active).length >= 100) throw new Error("PC queue is full.");
     let request = source.request;
     if (source.plan.kind === "jobs" && source.plan.action === "submit") {
-      const remaining = source.plan.maxApplications - (source.report?.submitted ?? 0);
+      const journal=await readSubmissions(dir);
+      const confirmed=new Set([...(source.report?.evidence.filter(e=>e.action==="submitted").map(e=>e.target)??[]),...journal.filter(r=>r.taskId===source.id).map(r=>r.url)]);
+      const remaining = source.plan.maxApplications - confirmed.size;
       if (remaining <= 0) throw new Error("All requested applications were already submitted.");
       request = "Apply to " + remaining + " job applications. Original task constraints: " + source.request;
     }
@@ -87,19 +91,19 @@ export function retryPcTask(dir: string, id: string, now = new Date()): Promise<
     const intent = parsePcIntent(request);
     if (intent?.type !== "task") throw new Error("Retry needs an explicit scoped task.");
     const task: PcTask = {id:randomUUID(),kind:intent.plan.kind,plan:intent.plan,request,status:"queued",createdAt:now.toISOString(),retryOf:id,
-      displayRequest:"Try again: " + (source.displayRequest ?? source.request).slice(0,1800), ...(intent.plan.kind === "jobs" ? { requiredFeature: "job-files-v1" as const } : {})};
+      displayRequest:"Try again: " + (source.displayRequest ?? source.request).slice(0,1800), ...(intent.plan.kind === "jobs" ? { requiredFeature: "task-sync-v1" as const } : {})};
     source.retryTaskId = task.id;
     state.tasks.push(task); return task;
   },now);
 }
 export function claimNextPcTask(dir: string, workerId: string, executors: ExecutorStatus[], now = new Date()): Promise<PcTask | undefined> {
-  return mutate(dir, state => {
+  return mutate(dir, async state => {
     state.workerSeenAt = now.toISOString(); state.workerId = workerId; state.executors = executors;
     if (state.tasks.some(t => ["running", "cancelling"].includes(t.status))) return;
     const task = state.tasks.find(t => t.status === "queued"); if (!task) return;
     if (!task.plan) { task.status = "needs_input"; task.result = "Older task needs an explicit search, prepare, or submit request."; return; }
     const candidates = executors.filter(e => e.capabilities.includes(capabilityFor(task.plan!)) && (!task.requiredFeature || e.features?.includes(task.requiredFeature)));
-    if (task.requiredFeature && !candidates.length) { task.progress = "Waiting for the updated worker with job-file tools. Restart the idle PC worker to activate the fix."; return; }
+    if (task.requiredFeature && !candidates.length) { task.progress = "Waiting for the updated worker with task-scoped submission receipts. Restart the idle PC worker to activate the fix."; return; }
     if (!candidates.some(e => e.state === "ready")) {
       task.progress = candidates.some(e => e.state === "cooldown") ? "Waiting for a capable agent's usage limit to reset." : "No ready agent has the required tools. Check PC agents.";
       if (!candidates.length && ["computer", "browser.execute"].includes(capabilityFor(task.plan))) { task.progress = "Waiting for the updated PC worker to connect its action tools. Restart the idle worker to activate them."; }
@@ -107,6 +111,15 @@ export function claimNextPcTask(dir: string, workerId: string, executors: Execut
       return;
     }
     task.status = "running"; task.startedAt = now.toISOString(); task.heartbeatAt = now.toISOString();
+    if(task.plan.kind==="jobs" && task.plan.action==="submit") {
+      let root=task;const seen=new Set<string>();
+      while(root.retryOf && !seen.has(root.id)){seen.add(root.id);const parent=state.tasks.find(t=>t.id===root.retryOf);if(!parent)break;root=parent;}
+      const family=new Set([root.id]);let changed=true;
+      while(changed){changed=false;for(const t of state.tasks)if(t.retryOf&&family.has(t.retryOf)&&!family.has(t.id)){family.add(t.id);changed=true;}}
+      const journal=await readSubmissions(dir);
+      const confirmedUrls=[...new Set([...state.tasks.filter(t=>family.has(t.id)).flatMap(t=>t.report?.evidence.filter(e=>e.action==="submitted").map(e=>e.target)??[]),...journal.filter(r=>family.has(r.taskId)).map(r=>r.url)])];
+      task.applicationScope={rootTaskId:root.id,requested:root.plan?.kind==="jobs"?root.plan.maxApplications:task.plan.maxApplications,confirmedUrls,startedAt:root.createdAt};
+    }
     task.workerId = workerId; task.lease = randomUUID(); task.progress = "Claimed by PC; choosing an agent.";
     return task;
   }, now);
@@ -125,12 +138,17 @@ export function heartbeatPcTask(dir: string, id: string, workerId: string, lease
   }, now);
 }
 export function finishPcTask(dir: string, id: string, workerId: string, lease: string, reportId: string, value: unknown, now = new Date()) {
-  return mutate(dir, state => {
+  return mutate(dir, async state => {
     const task = state.tasks.find(t => t.id === id && t.workerId === workerId && t.lease === lease);
     if (!task?.plan) return;
     if (task.reportId === reportId) return task;
     if (task.reportId || !["running", "cancelling", "needs_attention"].includes(task.status)) return;
-    const report = validateReport(value, task.plan);
+    let report = validateReport(value, task.plan);
+    const receipts=(await readSubmissions(dir)).filter(r=>r.taskId===task.id);
+    if(task.plan.kind==="jobs" && task.plan.action==="submit" && receipts.length>report.submitted){
+      report={...report,submitted:receipts.length,evidence:[...report.evidence.filter(e=>e.action!=="submitted").slice(0,30-receipts.length),...receipts.map(r=>({action:"submitted",target:r.url,detail:(r.company+" / "+r.role+": "+r.confirmation).slice(0,1000)}))],summary:receipts.length+" new applications confirmed for this attempt. Google sync status is shown separately on the job tracker.",outcome:receipts.length>=task.plan.maxApplications?"completed":"partial",needsInput:report.needsInput.filter(s=>!/^No (?:new submissions|applications were confirmed)/i.test(s))};
+      report=validateReport(report,task.plan);
+    }
     task.report = report; task.reportId = reportId; task.status = report.outcome;
     task.result = report.summary; task.finishedAt = now.toISOString();
     task.progress = task.cancelRequested && report.outcome !== "cancelled" ? "Finished before cancellation took effect; review the report." : report.summary.slice(0, 300);

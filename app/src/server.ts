@@ -17,12 +17,14 @@ import { handlePcTasks } from "./pcTasks/api.ts";
 import { handleJobs } from "./jobs/api.ts";
 import { handleSchedules } from "./schedules/api.ts";
 import { startScheduler } from "./schedules/morning.ts";
+import {handleLive,closeLiveClients} from "./live.ts";
 
 const config = loadConfig();
 
 const server = createServer((req, res) => {
   const path = new URL(req.url ?? "/", "http://localhost").pathname;
   const method = req.method ?? "GET";
+  if(path==="/api/live"){handleLive(req,res);return;}
 
   if (path.startsWith('/api/dashboard')) {
     handleDashboard(req, res, path, config).catch(() => { if (!res.headersSent) res.writeHead(500); res.end(); });
@@ -83,6 +85,7 @@ server.listen(config.port, () => {
 for (const signal of ["SIGTERM", "SIGINT"] as const) {
   process.on(signal, () => {
     console.log(`jarvis-web received ${signal}, shutting down`);
+    closeLiveClients();
     server.close(() => process.exit(0));
   });
 }
