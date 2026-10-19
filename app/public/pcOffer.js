@@ -11,7 +11,7 @@
 // ..." / "On my PC, execute this task: ..."), where the server and the worker
 // validate it like any typed command. The model's line is only a suggestion.
 
-const OFFER_LINE = /(?:^|\n)[ \t]*PC_TASK (browser|computer):[ \t]*([^\n]{3,400}?)[ \t]*$/;
+const OFFER_LINE = /(?:^|\n)[ \t]*PC_TASK (browser|computer):[ \t]*([^\n]{3,1800}?)[ \t]*$/;
 const ANY_OFFER = /(?:^|\n)[ \t]*PC_TASK[\s\S]*$/;
 
 /** Splits a reply into the text to show and the PC offer (if the last line is one). */

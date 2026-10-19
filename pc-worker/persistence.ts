@@ -5,7 +5,7 @@ import { createServer, type Server } from "node:net";
 import type { PcReport } from "../app/src/pcTasks/protocol.ts";
 import type { ClaimedTask, Cooldowns } from "./agents.ts";
 export interface PendingReport { task: ClaimedTask; reportId: string; report: PcReport }
-export interface LocalState { workerId: string; recoveryHold?: boolean; active?: ClaimedTask; outbox?: PendingReport; cooldowns: Cooldowns }
+export interface LocalState { workerId: string; recoveryHold?: boolean; active?: ClaimedTask; outbox?: PendingReport; cooldowns: Cooldowns; checkpoint?: { taskId: string; previousAgent: string; steps: string[]; at: string } }
 export async function readState(dir: string): Promise<LocalState> {
   try {
     const state = JSON.parse(await readFile(join(dir, "pc-worker-state.json"), "utf8"));

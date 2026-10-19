@@ -1,8 +1,8 @@
 # Jarvis
 
-My personal AI assistant. I talk to it out loud, it remembers what I'm working on, and it can take real actions on my machine, but only after it asks me first.
+My personal AI assistant. I talk to it out loud, it remembers what I'm working on, and it can take real actions on my machine, when I explicitly request a scoped task.
 
-I'm building Jarvis as a hands-on DevOps project: I put it together, locked it down, and I'm moving it from my PC to the cloud with Terraform, separate dev and prod environments, and a dev → prod release flow.
+I'm building Jarvis as a hands-on DevOps project: I put it together, locked it down, and I'm moving it from my PC to the cloud with Terraform, separate dev and prod environments, and a dev â†’ prod release flow.
 
 ## What it does
 
@@ -10,14 +10,14 @@ I'm building Jarvis as a hands-on DevOps project: I put it together, locked it d
 - **Chats from anywhere I'm signed in.** A web chat on my private network streams Jarvis's answers as it writes them.
 - **Talks.** I hold a key, speak, and it answers through my speakers.
 - **Has a face.** A full-screen visualizer reacts while it listens, thinks, and speaks.
-- **Takes action locally, with permission.** The PC assistant asks before edits or commands. Web chat stays read-only.
+- **Takes action locally, with permission.** Explicit PC requests are dispatched to a scoped local worker; server model tools stay read-only.
 
 ## How I set it up
 
 | Layer | What runs it | My setup |
 |---|---|---|
 | Brain | Claude Code, Codex, or Gemini | Jarvis persona, selectable web engine, shared vault |
-| Memory | Obsidian vault | Raw (inbox) → Wiki (clean notes) → Outputs (finished reports) |
+| Memory | Obsidian vault | Raw (inbox) â†’ Wiki (clean notes) â†’ Outputs (finished reports) |
 | Voice | Local speech-to-text and text-to-speech | Push-to-talk, British male voice, ask-before-acting |
 | Face | Browser visualizer | Full-screen circuit-board scene |
 | Servers | AWS Lightsail, built with Terraform | `jarvis-dev` for testing, `jarvis-prod` for daily use |
@@ -25,14 +25,14 @@ I'm building Jarvis as a hands-on DevOps project: I put it together, locked it d
 ## How I ship changes
 
 ```text
-dev branch  →  test on jarvis-dev  →  pull request  →  main branch  →  approve  →  jarvis-prod
+dev branch  â†’  test on jarvis-dev  â†’  pull request  â†’  main branch  â†’  approve  â†’  jarvis-prod
 ```
 
 Nothing reaches prod without passing through dev first. Details in [docs/environments.md](docs/environments.md).
 
 ## Security decisions
 
-- **Ask-first permissions.** I turned off the "do anything without asking" mode. Jarvis has to ask out loud before any real action.
+- **Scoped permissions.** Explicit user commands authorize their requested work; suggested actions still need a Run click. Platform permissions and approval requirements remain enforced. The latest direct-routing and workspace-handoff changes are local and pending activation, as recorded in CHANGELOG.md.
 - **Nothing public.** On both servers, no TCP port is open to the internet: not SSH, not HTTP, not HTTPS. The only open port is Tailscale's encrypted UDP port, which answers only my own devices. Everything else goes through my private Tailscale network.
 - **Least-privilege network rules.** The GitHub deploy robot can only reach the server over SSH, and the server can't reach my PC or phone at all.
 - **No secrets in git.** Real settings and tokens stay on the machine. This repo only has `.example` files with placeholders.
@@ -41,6 +41,8 @@ Nothing reaches prod without passing through dev first. Details in [docs/environ
 ## Dashboard
 
 Three selectable views, a time-based Auto cycle, saved tasks, voice commands, and quota-aware Claude/Codex/Gemini routing are available in dev. Gmail and Calendar reads use the connected Codex account. See [dashboard and installed app](docs/dashboard.md) for controls and current limits.
+
+Ruflo project task tracking and memory are integrated with the local workspace executor and passed a live Codex tool test. The running worker still needs the checked activation described in [PC worker setup](docs/pc-worker.md#ruflo-project-tools).
 
 ## Roadmap
 

@@ -59,7 +59,7 @@ The installer sets up a pinned standalone official Codex CLI and a trusted CA bu
 
     powershell -ExecutionPolicy Bypass -File pc-worker/restart.ps1
 
-A worker started inside another coding agent can inherit that agent’s read-only permission profile. Restarting from normal PowerShell or the registered logon task starts the worker with its configured workspace permissions. Never remove a managed permission profile inside a restricted session.
+A worker started inside another coding agent can inherit that agentâ€™s read-only permission profile. Restarting from normal PowerShell or the registered logon task starts the worker with its configured workspace permissions. Never remove a managed permission profile inside a restricted session.
 
 Use a standalone official Codex CLI for unattended work rather than the desktop app bundled alpha binary. Keep its auth/runtime cache separate in %USERPROFILE%\.jarvis\codex; authenticate that cache with the official Codex login flow. Credentials, settings, reports and caches never belong in the repository.
 
@@ -158,3 +158,24 @@ Jarvis queues one PC task every morning: "Apply to 10 job applications. Schedule
 - **PC off:** the task waits; if it is still waiting 12 hours later it is cancelled instead of running late.
 - **Pause / Resume** on the dashboard's "On your radar" card (saved on the server), which also shows the next run and the last result.
 - **My 6 AM Claude routine** (prepare-only) can keep running before it; the 7:00 AM Jarvis run submits.
+
+## Direct requests and workspace continuation (local changes, 2026-10-19)
+
+Explicit project continuation and LinkedIn drafting requests are routed before chat and need no second Run click. Suggested actions derived from statements still use an optional Run offer; model suggestions never authorize execution. Local worker settings must contain the requested workspace alias, for example `ezlynx` pointing to the existing EZLynx project. Unknown aliases fail with an explicit configuration message.
+
+The worker avoids starting a provider whose fresh five-hour or weekly window is at least 90% used. Readings older than 35 minutes and elapsed reset windows do not block selection. It does not terminate active work solely because a percentage crosses 90%. If a code/workspace run exits at a quota after using tools, the worker saves a checkpoint and starts an available alternate against the same workspace, with instructions to inspect existing work and finish only missing steps. The checkpoint is local and contains task ID, prior agent, time and bounded progress. Cancellation, lost ownership and restart recovery still stop execution. Browser submissions and other uncertain external side effects are never automatically replayed.
+
+Draft replies are placed in actual composers and left unsent unless report-only/no-typing is requested. Existing drafts must be preserved. Read full conversations, verify the exact recipient and visible text, and report non-editable sponsored messages rather than sending a response button.
+
+Validation used simulated providers for a post-edit Claude-to-Codex handoff. Live activation remains blocked by Windows file/process access denial, and server routing changes have not been deployed. Do not describe this as a verified live cross-provider workflow yet.
+
+
+## Ruflo project tools
+
+Ruflo 3.57.1 is a private PC runtime, connected to workspace agents only. Nine tools provide task creation/status/updates/listing and project memory storage/retrieval/search/listing/stats. The adapter enforces the allowlist itself, refuses database path overrides, and checks the installed version. It does not expose shell, browser, federation, API-billed agent execution, or autonomous swarm tools. Actual work stays with the existing scoped Claude/Codex executor. Ruflo task records are not running workers and do not prove completion. Obsidian remains the personal memory source; project memory is not a vault mirror.
+
+Use “Use Ruflo in my jarvis project to review the router” or a normal approved workspace request. Workspace instructions tell the agent to use Ruflo for larger tasks. Code/model approval review and sandbox restrictions still apply. Configured Codex workspace MCP tools request normal automatic approval review; the connection is required, so startup failures cannot silently pretend Ruflo was used.
+
+Run `powershell -File pc-worker/activate-ruflo.ps1` from normal Windows PowerShell for checked activation. It verifies/installs the pinned private package, preserves settings and credentials while adding the EZLynx alias, saves separate ruflo-runtime.json metadata, and invokes the existing idle-only restart helper. It never changes platform permission policy or retries uncertain tasks. To disable Ruflo, set enabled=false in the private metadata and restart an idle worker. Installation uses --ignore-scripts and --omit=optional; tested task and SQL.js/HNSW memory features work on Windows without native builds.
+
+Live verification: a Codex executor read the saved smoke-test memory and listed its task using jarvis-ruflo. Direct handlers also passed create, persist across process exit, retrieve and search checks. This verifies the executor connection, not activation of the long-running worker or real quota interruption. At this checkpoint Windows still denies protected settings writes and safe process inspection. Server dev deployment is tracked separately in the vault.

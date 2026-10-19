@@ -7,6 +7,13 @@ import { ACTION_GUIDANCE } from "../src/brain/actionContext.ts";
 const TASK = 'Create an all-day event called "Payday" in Google Calendar starting Friday, October 23, 2026, repeating every 2 weeks on Friday.';
 const REPLY = "Noted, sir: payday is Friday, October 23, then every other Friday. I can't write to your calendar from here; tap the button to add it from your PC.";
 
+test('long bounded offers retain their Run data instead of disappearing',()=>{
+ const task='Continue the project. '+'Read the existing files. '.repeat(24);
+ const offer=splitPcOffer('Ready.\nPC_TASK computer: '+task).offer;
+ assert.equal(offer?.task,task.trim());assert.equal(resolvePcCommand(offerCommand(offer!))?.intent.type,'task');
+ assert.equal(splitPcOffer('PC_TASK computer: '+'x'.repeat(1801)).offer,undefined);
+});
+
 test("splits the PC task line from the visible reply", () => {
   const { text, offer } = splitPcOffer(`${REPLY}\nPC_TASK browser: ${TASK}`);
   assert.equal(text, REPLY);

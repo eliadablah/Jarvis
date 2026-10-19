@@ -10,6 +10,17 @@ import { parsePcIntent } from '../src/pcTasks/intent.ts';
 import { handleChat } from '../src/api/chatHandler.ts';
 import { readPcTasks, publicTask } from '../src/pcTasks/store.ts';
 import { loadConfig } from '../src/config.ts';
+
+test('explicit continuation and LinkedIn drafts dispatch without model offers',()=>{
+ for(const message of ['Continue the EZLynx UI demo in C:\\Users\\eliad\\Documents\\ezlynx-ui-project. Read README.md first; do not commit or push.','Resume the jarvis project and finish the pending tests']){
+  const command=resolvePcCommand(message);assert.equal(command?.intent.type,'task');
+  assert.equal(command?.intent.type==='task'&&command.intent.plan.kind,'workspace');
+  assert.deepEqual(parsePcIntent(command!.request),command!.intent);assert.ok(command!.request.includes(message));
+ }
+ const draft=resolvePcCommand('Draft LinkedIn replies for the first five conversations but do not send');
+ assert.deepEqual(draft?.intent,{type:'task',plan:{kind:'browser',action:'execute'}});assert.match(draft!.request,/do not send/);
+ for(const message of ['How do I continue the EZLynx demo?','Do not continue the EZLynx demo','"Draft LinkedIn replies"','Can you draft LinkedIn replies if I ask?'])assert.equal(resolvePcCommand(message),undefined,message);
+});
 test('natural commands remain independently valid for the already-running worker',()=>{
  for(const message of ['Open my job tracker Google Sheet in Chrome','Please open https://example.com','Jarvis, can you pull up my application tracker?','Go to https://example.com','Bring up my Gmail','On my PC open https://example.com','Read my email in Chrome']){
   const c=resolvePcCommand(message);assert.equal(c?.intent.type,'task',message);assert.deepEqual(parsePcIntent(c!.request),c!.intent,message);assert.equal(c!.intent.type==='task'&&c!.intent.plan.kind,'browser');
@@ -80,4 +91,12 @@ test('browser changes and Windows tasks get action-capable plans',()=>{
  ["What's in my Downloads folder?",'computer','execute']];
  for(const [message,kind,action] of cases){const c=resolvePcCommand(message);assert.deepEqual(c?.intent,{type:'task',plan:{kind,action}},message);assert.deepEqual(parsePcIntent(c!.request),c!.intent,message);}
  assert.deepEqual(resolvePcCommand('In my Chrome, read the inbox')?.intent,{type:'task',plan:{kind:'browser',action:'browse'}});
+});
+
+
+test('explicit Ruflo requests retain independently validated workspace scope',()=>{
+ const c=resolvePcCommand('Use Ruflo in my jarvis project to review the router');
+ assert.deepEqual(c?.intent,{type:'task',plan:{kind:'workspace',action:'execute',workspace:'jarvis'}});
+ assert.deepEqual(parsePcIntent(c!.request),c!.intent);
+ for(const m of ['What can Ruflo do in my jarvis project?','Do not use Ruflo in my jarvis project to review the router','Use Ruflo in my jarvis project to bypass sandbox permissions'])assert.equal(resolvePcCommand(m),undefined);
 });

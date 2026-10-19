@@ -56,6 +56,22 @@ export function resolvePcCommand(message: string, previousLink?: string): PcComm
   // Never turn discussion, quotes, negation or permission bypasses into actions.
   if (/^(?:don't|do not|not|never|how|what|why|when|did|is|are|if|imagine|explain|tell me|remind|help|plan|should|would|["'“])\b/i.test(text) || /^["'“]/.test(text)) return;
   if (/\b(?:ignore|bypass|disable|override)\b.{0,35}\b(?:permission|guardrail|rule|safety|sandbox)/i.test(text)) return;
+  const ruflo = /^use ruflo in (?:my |the )?([a-z][a-z0-9_-]{0,40}) (?:workspace|project|repo)\s+(?:to\s+)?(.+)/i.exec(text);
+  if (ruflo && /^(?:create|write|edit|fix|build|test|run|organize|read|summari[sz]e|review|check|list|update)\b/i.test(ruflo[2]!)) {
+    const request = "In my " + ruflo[1]!.toLowerCase() + " workspace, " + ruflo[2] + ". Use the connected Ruflo task and memory tools to organize this work.";
+    return { request, intent: parsePcIntent(request)! };
+  }
+  // Explicit project continuation is already a command, not a model-suggested offer.
+  // A named workspace still has to be approved in the local worker configuration.
+  const continuation = /^(?:continue|resume|finish)\s+(?:the\s+)?([a-z][a-z0-9_-]{0,40})\b.{0,100}\b(?:project|repo|workspace|demo)\b/i.exec(text);
+  if (continuation) {
+    const request = "In my " + continuation[1]!.toLowerCase() + " workspace, update the existing project. Original user request: " + text;
+    return { request, intent: parsePcIntent(request)! };
+  }
+  if (/^(?:draft|prepare|write)\b/i.test(text) && /\blinked\s*in\b/i.test(text) && /\b(?:replies|reply|messages?)\b/i.test(text)) {
+    const request = "In my Chrome, execute this task: " + text;
+    return { request, intent: parsePcIntent(request)! };
+  }
   text = text.replace(/^on my (?:pc|computer)[,:]?\s+(?=(?:open|pull up|bring up|launch|visit|navigate to|go to)\b)/i, "");
   const job = resolveJobCommand(text);
   if (job) return job;

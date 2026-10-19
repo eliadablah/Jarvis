@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { PC_PROTOCOL, emptyReport, type PcLimits, type PcReport } from "../app/src/pcTasks/protocol.ts";
 import { parsePcIntent } from "../app/src/pcTasks/intent.ts";
-import { agentStatuses, chooseAgents, canFallback, runAgent, type ClaimedTask, type WorkerSettings } from "./agents.ts";
+import { agentStatuses, chooseAgents, canFallback, canResumeWorkspace, runAgent, type ClaimedTask, type WorkerSettings } from "./agents.ts";
 import { codexSessionDirs, newerLimits, probeClaudeLimits, readCodexLimits } from "./limits.ts";
 import { readState, saveState, acquireWorkerLock, type LocalState } from "./persistence.ts";
 export { jobPrompt } from "./agents.ts";
@@ -29,6 +29,13 @@ export async function loadSettings(): Promise<WorkerSettings> {
     try { await access(python); settings.chromeMcpPython = python; }
     catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
   }
+  try {
+    const runtime = JSON.parse((await readFile(join(STATE_DIR, "ruflo-runtime.json"), "utf8")).replace(/^\uFEFF/, ""));
+    if (runtime.enabled === true && typeof runtime.root === "string") {
+      await access(join(runtime.root, "node_modules", "@claude-flow", "cli", "package.json"));
+      settings.rufloRoot = runtime.root;
+    }
+  } catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
   const url = new URL(settings.server);
   if (url.protocol !== "https:" || url.username || url.password || !settings.token || !settings.jobsDir) throw new Error("Invalid PC worker settings.");
   settings.maxApplications = Math.min(25, Math.max(1, Number.isFinite(settings.maxApplications) ? settings.maxApplications! : 10));
@@ -72,7 +79,11 @@ async function refreshLimits(settings: WorkerSettings, idle: boolean): Promise<v
     limits.claude = newerLimits(limits.claude, await probeClaudeLimits(settings.claudeBin));
   }
 }
-async function execute(settings: WorkerSettings, state: LocalState, task: ClaimedTask): Promise<PcReport> {
+export async function execute(settings: WorkerSettings, state: LocalState, task: ClaimedTask, dependencies: {
+  run?: typeof runAgent; persist?: typeof saveState; refresh?: typeof refreshLimits; heartbeatMs?: number;
+} = {}): Promise<PcReport> {
+  const launch = dependencies.run ?? runAgent, persist = dependencies.persist ?? saveState;
+  const refresh = dependencies.refresh ?? refreshLimits;
   const controller = new AbortController();
   let progress = "Choosing a capable agent.", executor: string | undefined, lastContact = Date.now(), finished = false, lastBeat = 0;
   const heartbeat = async () => {
@@ -87,28 +98,43 @@ async function execute(settings: WorkerSettings, state: LocalState, task: Claime
     } catch { if (Date.now() - lastContact > 60_000) controller.abort("connection_lost"); }
   };
   await heartbeat();
-  const pump = (async () => { while (!finished && !controller.signal.aborted) { await sleep(HEARTBEAT_MS); if (!finished) { await refreshLimits(settings, false).catch(() => {}); await heartbeat(); } } })();
+  const pump = (async () => { while (!finished && !controller.signal.aborted) { await sleep(dependencies.heartbeatMs ?? HEARTBEAT_MS); if (!finished) { await refresh(settings, false).catch(() => {}); await heartbeat(); } } })();
   try {
     let result = emptyReport("needs_input", "No available agent has this task's tools.");
-    for (const id of chooseAgents(task.plan, agentStatuses(settings, state.cooldowns))) {
+    let continuation = "";
+    const steps: string[] = [];
+    const attempted = new Set<string>();
+    for (;;) {
+      const id = chooseAgents(task.plan, agentStatuses(settings, state.cooldowns, Date.now(), limits)).find(candidate => !attempted.has(candidate));
+      if (!id) break;
+      attempted.add(id);
       if (controller.signal.aborted) break;
-      if (agentStatuses(settings, state.cooldowns).find(e => e.id === id)?.state !== "ready") continue;
+      if (agentStatuses(settings, state.cooldowns, Date.now(), limits).find(e => e.id === id)?.state !== "ready") continue;
       executor = id; progress = "Starting " + id + "."; await heartbeat();
       // Each new live step is reported right away (at most every 2 seconds) so the dashboard can show the PC working.
-      const run = await runAgent(id, settings, task, controller.signal, text => {
+      const run = await launch(id, settings, task, controller.signal, text => {
         progress = text;
+        if (steps.at(-1) !== text) { steps.push(text.slice(0, 300)); if (steps.length > 12) steps.shift(); }
         if (!finished && Date.now() - lastBeat >= 2000) void heartbeat();
-      }, undefined, reading => { limits.claude = newerLimits(limits.claude, reading); });
+      }, undefined, reading => { limits.claude = newerLimits(limits.claude, reading); }, continuation);
       result = run.report;
       if (run.failure) {
         const wait = { until: Date.now() + (run.failure === "quota" ? 15 * 60_000 : 60_000), reason: run.report.summary };
         state.cooldowns[id] = wait;
         if (id.startsWith("claude-")) { state.cooldowns["claude-files"] = wait; state.cooldowns["claude-chrome"] = wait; state.cooldowns["claude-computer"] = wait; }
         if (id.startsWith("codex-")) { state.cooldowns["codex-local"] = wait; state.cooldowns["codex-computer"] = wait; }
-        await saveState(STATE_DIR, state);
+        await persist(STATE_DIR, state);
       }
-      if (!canFallback(run)) break;
-      progress = id + " unavailable before using tools; trying another capable agent.";
+      if (canResumeWorkspace(task.plan, run)) {
+        state.checkpoint = { taskId: task.id, previousAgent: id, steps: [...steps], at: new Date().toISOString() };
+        await persist(STATE_DIR, state);
+        continuation = JSON.stringify(state.checkpoint);
+        progress = id + " reached its quota; saved progress and continuing the existing workspace with another capable agent.";
+      } else {
+        if (!canFallback(run)) break;
+        progress = id + " unavailable before using tools; trying another capable agent.";
+      }
+      await heartbeat();
     }
     if (controller.signal.aborted) return emptyReport(controller.signal.reason === "cancel_requested" ? "cancelled" : "needs_input",
       controller.signal.reason === "cancel_requested" ? "PC confirmed the agent stopped. Already completed actions may remain; review before retrying." :
@@ -135,10 +161,10 @@ async function main(): Promise<void> {
       if (state.outbox) {
         await deliverReport(settings, state);
         log("report acknowledged: " + state.outbox.task.id + " " + state.outbox.report.outcome);
-        delete state.outbox; delete state.active; await saveState(STATE_DIR, state);
+        delete state.outbox; delete state.active; delete state.checkpoint; await saveState(STATE_DIR, state);
       }
       await refreshLimits(settings, true).catch(() => {});
-      const executors = agentStatuses(settings, state.cooldowns).map(e => state.recoveryHold ?
+      const executors = agentStatuses(settings, state.cooldowns, Date.now(), limits).map(e => state.recoveryHold ?
         { ...e, state: "unavailable" as const, reason: "Interrupted run needs local review. Worker is paused to prevent duplicate actions." } : e);
       const response = await call(settings, "/api/pc/tasks/claim", { workerId: state.workerId, executors, limits });
       if (response.status === 204) { await sleep(POLL_MS); continue; }

@@ -14,6 +14,30 @@ import { agentStatuses, chooseAgents, canFallback, mayHaveActed, reportedRun, re
 import { readState, saveState, acquireWorkerLock } from "./persistence.ts";
 import { validateClaim, deliverReport } from "./worker.ts";
 import { readWorkerActivity } from "./status.ts";
+import { quotaPressure } from './limits.ts';
+import { canResumeWorkspace, DRAFT_GUIDANCE } from './agents.ts';
+
+test('90 percent routing uses fresh unexpired readings across provider adapters',()=>{
+ const now=Date.parse('2026-10-19T19:00:00Z');
+ const reading={updatedAt:new Date(now).toISOString(),fiveHour:{usedPercent:90,resetsAt:(now+3600000)/1000}};
+ assert.equal(quotaPressure(reading,now),now+3600000);
+ assert.equal(quotaPressure({...reading,fiveHour:{...reading.fiveHour,usedPercent:89.9}},now),undefined);
+ assert.equal(quotaPressure({...reading,updatedAt:new Date(now-3600000).toISOString()},now),undefined);
+ assert.equal(quotaPressure(reading,now+3600001),undefined);
+ const settings={server:'https://example.com',token:'test',jobsDir:'.',claudeBin:'claude',codexBin:'codex',windowsMcpCommand:'windows'};
+ const statuses=agentStatuses(settings,{},now,{claude:reading});
+ assert.ok(statuses.filter(s=>s.id.startsWith('claude-')).every(s=>s.state==='cooldown'));
+ assert.deepEqual(chooseAgents(plan('Find support jobs'),statuses),['codex-computer']);
+});
+test('quota after code tools permits inspected continuation without browser submission replay',()=>{
+ const run={report:emptyReport('needs_input','Usage limit reached'),failure:'quota' as const,safeToRetry:false};
+ const workspace=plan('In my assistant workspace, update the project');
+ assert.equal(canResumeWorkspace(workspace,run),true);
+ for(const request of ['Apply to 1 support jobs','In my Chrome, execute this task: draft replies','On my PC, execute this task: open Excel'])assert.equal(canResumeWorkspace(plan(request),run),false);
+ assert.equal(canResumeWorkspace(workspace,{...run,failure:'authentication'}),false);
+ assert.equal(canFallback(run),false);assert.equal(reportedRun(run.report,workspace,true).failure,'quota');
+ assert.match(DRAFT_GUIDANCE,/leaving it unsent/);assert.match(DRAFT_GUIDANCE,/report-only/);assert.match(DRAFT_GUIDANCE,/Preserve any existing draft/);
+});
 const agents: ExecutorStatus[] = [{ id: "claude-chrome", capabilities: ["jobs", "browser"], state: "ready", reason: "", remainingTokens: null }];
 const clock = new Date("2026-10-16T12:00:00Z");
 test("restart status keeps active tasks, bounds HTTPS and omits private data", async () => {
@@ -262,3 +286,29 @@ test("report-only Claude refusal falls back while real browser actions block ret
   assert.equal(canFallback(reportedRun(refused,scope,names.some(mayHaveActed))),false);
  }
 });
+
+test('execution hands unfinished code to the next provider with a saved checkpoint and existing files',async()=>withDir(async dir=>{
+ const {execute}=await import('./worker.ts');
+ const state=await readState(dir),savedFetch=globalThis.fetch;
+ const settings={server:'https://example.com',token:'test',jobsDir:dir,claudeBin:'claude',codexBin:'codex',workspaces:{assistant:dir}};
+ const task={id:randomUUID(),lease:randomUUID(),workerId:state.workerId,request:'In my assistant workspace, update the project',plan:plan('In my assistant workspace, update the project')};
+ const calls:string[]=[],checkpoints:unknown[]=[];
+ // This starts Claude, then models a genuine quota exit after a local edit.
+ state.cooldowns['codex-local']={until:Date.now()+60000,reason:'test initially prefers Claude'};
+ globalThis.fetch=async()=>Response.json({cancelRequested:false});
+ try{
+  const result=await execute(settings,state,task,{heartbeatMs:1,refresh:async()=>{},persist:async(_root,s)=>{checkpoints.push(structuredClone(s.checkpoint));},run:async(id,_settings,_task,_signal,progress,_diagnostic,_limits,continuation)=>{
+   calls.push(id);
+   if(id==='claude-files'){
+    await writeFile(join(dir,'completed-work.txt'),'preserve this');progress('Writing a file');
+    delete state.cooldowns['codex-local'];
+    return {report:emptyReport('needs_input','Usage limit reached'),failure:'quota',safeToRetry:false};
+   }
+   assert.match(continuation!,/claude-files/);assert.match(continuation!,/Writing a file/);
+   assert.equal(await readFile(join(dir,'completed-work.txt'),'utf8'),'preserve this');
+   return {report:{...emptyReport('completed','Finished remaining checks'),evidence:[{action:'verified',target:dir,detail:'Existing edit preserved and checks finished'}]},safeToRetry:false};
+  }});
+  // Candidates must be re-evaluated after the quota exit, not fixed before Claude ran.
+  assert.deepEqual(calls,['claude-files','codex-local']);assert.equal(result.outcome,'completed');assert.ok(checkpoints.some(Boolean));
+ }finally{globalThis.fetch=savedFetch;}
+}));

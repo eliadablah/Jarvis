@@ -2,6 +2,25 @@
 
 ## 2026-10-19
 
+### Feature - Ruflo project coordination for the local worker
+
+- Installed and pinned Ruflo 3.57.1 in the private local runtime. Workspace Claude and Codex adapters receive nine Ruflo task/memory tools through a server-enforced allowlist. Browser/job/desktop adapters keep their existing tools. Ruflo records coordinate work; the existing scoped agent executes it. Autonomous swarms and API-billed agent execution are not enabled.
+- Explicit “Use Ruflo in my jarvis project to review the router” commands canonicalize into the independently validated workspace protocol. Project context persists in Ruflo’s local project store. No vault copy or credentials are imported.
+- Added a version check, argument-size bounds, rejection of unlisted tools and database path overrides, separate private runtime metadata and a checked activation helper. Codex workspace MCP calls use normal automatic approval review while retaining workspace-write sandboxing.
+- Validation: 107 app tests, 33 worker tests, app and worker TypeScript checks and app build pass. Real Ruflo task creation and memory write/read/search pass, including retrieval from a fresh process. A live Codex worker run successfully called the Ruflo memory and task-list tools and reported the observed value/count.
+- Local activation remains blocked: Windows denied the protected pc-worker.json alias update and Win32 process inspection needed for safe idle-worker restart. Runtime metadata was saved; no process was stopped or replaced. Use pc-worker/activate-ruflo.ps1 from normal Windows PowerShell. Real quota-triggered cross-provider continuation remains unverified; controlled-provider preservation tests pass.
+
+
+### Fix - Direct continuation requests, quota-aware workspace handoff and in-site drafts
+
+- Explicit project continuation and LinkedIn drafting commands now canonicalize directly into independently validated PC tasks, avoiding a second model-generated Run offer. Suggested actions inferred from statements still require a tap. Long valid offers (up to 1800 characters) no longer disappear at the old 400-character cutoff.
+- Fresh usage readings at or above 90% exclude all adapters for that provider until the relevant window resets; stale and expired readings do not strand a provider. Existing capability, cooldown and sandbox checks remain enforced.
+- A workspace agent that exits at quota after tool use saves a durable checkpoint before another capable provider continues. The next provider must inspect current files/diffs, preserve completed changes and finish only remaining work. Browser actions, submissions, authentication failures and unknown interrupted side effects are not replayed automatically.
+- Drafting now reads full threads and stages replies in the site's composer, unsent, with report evidence. Explicit report-only/no-typing instructions and existing drafts are preserved. Non-editable sponsored messages must be reported as a limitation.
+- Validation: 106 app tests and 31 worker tests pass with local no-subprocess test isolation; app typecheck/build and PC TypeScript checks pass. A controlled execution test simulates Claude's quota exit after a file edit, verifies the saved checkpoint reaches Codex, and checks the existing file is preserved. This is a simulated-provider test, not a live model handoff.
+- Activation is blocked: Windows denied writing the local worker settings and the process query required by the safe idle-worker restart. Settings were not changed and the worker was not restarted. The server-side routing changes are local only; no commit, push or deployment was made.
+
+
 ### Feature - Live Claude and Codex usage limits, and search CLIs for job runs
 
 - **Usage limits on the dashboard:** the PC worker reads Claude's 5-hour and weekly usage from the `rate_limit_event` in every Claude run (plus a one-word probe when idle for 30 minutes) and Codex's from its session logs, and sends them with each claim and heartbeat. The server validates and stores the later reading per provider, and the PC activity card and side panel show bars with reset times, with an honest "as of" age when the reading is old. Old workers that send no limits keep working.
@@ -40,7 +59,7 @@
 
 - The dashboard's Job search section now shows my real pipeline (applied, need me, responses, last 7 days) and a list of recent applications with stage, pay and posting links, read live from the Google Sheets tracker through a new `GET /api/jobs`. It refreshes every two minutes and when the tab regains focus.
 - The server reads the sheet as a read-only Google service account (Viewer on that one sheet, `spreadsheets.readonly`), signing the JWT with `node:crypto` and calling the Sheets REST API with `fetch`: no new dependencies. Results are cached for a minute, with a saved copy served for up to ten minutes if Google is unreachable. `CV Used` and `Notes` never reach the browser.
-- The key travels GitHub secret `GOOGLE_SERVICE_ACCOUNT_B64` → server `.env`; without it the section keeps showing "Tracker not connected". Setup in `docs/job-tracker.md`.
+- The key travels GitHub secret `GOOGLE_SERVICE_ACCOUNT_B64` â†’ server `.env`; without it the section keeps showing "Tracker not connected". Setup in `docs/job-tracker.md`.
 - Tests: 86 passing (adds row parsing, pipeline summary, JWT signing, and a full sign-in/cache/stale-fallback cycle against a fake Google).
 
 ### Feature - Jarvis for Windows desktop app
@@ -132,7 +151,7 @@
 ### Feature - Jarvis applies to jobs through a PC worker
 
 - "Apply to jobs" / "find me jobs" in chat now queues an errand instead of answering. A worker on my PC (`pc-worker/`) picks it up, runs Claude Code with Chrome control in my ai-job-search workspace, applies on LinkedIn Easy Apply in my signed-in Chrome (up to 10 per run), and reports back; the report is available to the chat.
-- Worker endpoints need the `PC_WORKER_TOKEN` bearer token (GitHub secret → server `.env`); without it the feature stays off. See `docs/pc-worker.md`.
+- Worker endpoints need the `PC_WORKER_TOKEN` bearer token (GitHub secret â†’ server `.env`); without it the feature stays off. See `docs/pc-worker.md`.
 - Tests: queue, intent, and token checks.
 
 ### Change - Faster voice replies
@@ -158,7 +177,7 @@
 
 ### Fix - Clearer engine errors and auto-closing confirmations
 
-- Found in live testing on dev: with Codex at its usage limit, an account question ("any meetings today?") answered "No chat engine is available… check server sign-in". It now says Gmail and Calendar go through Codex, that Codex reported a usage limit, about how many minutes until it's retried, and that Claude can't read the accounts yet. Other "nothing available" cases describe each engine's actual state instead of blaming sign-in.
+- Found in live testing on dev: with Codex at its usage limit, an account question ("any meetings today?") answered "No chat engine is availableâ€¦ check server sign-in". It now says Gmail and Calendar go through Codex, that Codex reported a usage limit, about how many minutes until it's retried, and that Claude can't read the accounts yet. Other "nothing available" cases describe each engine's actual state instead of blaming sign-in.
 - Short confirmations (view switched, task added, task completed) close the reply panel after 6 seconds, so it no longer covers views A and B. Real answers and errors stay open until closed.
 - Tests: 68 passing (adds the cooldown message case).
 
@@ -180,7 +199,7 @@
 ### Fix - Voice never stalls on slow devices
 
 - On dev, Kokoro took ~33 seconds to make 2.6 seconds of speech in the test browser, so Jarvis sat on "thinking" for minutes on long answers.
-- Each sentence now goes to Kokoro only once it's loaded and as long as this device generates speech at least as fast as it plays (up to 1.2× real time). A sentence that isn't back in 6 seconds, or a device that's too slow, switches to the browser's own British voice, which speaks instantly while a speech-shaped waveform keeps the face moving.
+- Each sentence now goes to Kokoro only once it's loaded and as long as this device generates speech at least as fast as it plays (up to 1.2Ã— real time). A sentence that isn't back in 6 seconds, or a device that's too slow, switches to the browser's own British voice, which speaks instantly while a speech-shaped waveform keeps the face moving.
 - The worker reports how long each sentence took. The "too slow" verdict is remembered per device; switching the voice off and on in the menu gives Kokoro another try.
 
 ### App - Face and voice, like my local Jarvis
@@ -256,7 +275,7 @@
 ### CI/CD - GitHub Actions pipeline
 
 - `ci.yml`: on every push and pull request to `dev`/`main`, type-check, test, and build the app; `terraform fmt` and `validate` every stack without touching real state; lint the deploy script.
-- `deploy.yml`: builds the image (tests run inside the Docker build), pushes it to GHCR tagged with the short commit SHA, then deploys. `dev` branch → `jarvis-dev` automatically; `main` → `jarvis-prod` after approval in the `production` environment.
+- `deploy.yml`: builds the image (tests run inside the Docker build), pushes it to GHCR tagged with the short commit SHA, then deploys. `dev` branch â†’ `jarvis-dev` automatically; `main` â†’ `jarvis-prod` after approval in the `production` environment.
 - `deploy/deploy.sh`: joins nothing itself; runs after the runner joins Tailscale as `tag:ci`, SSHes in as `deploy`, ships the compose file, logs in to GHCR only for the pull, restarts the app, and checks `/healthz` until it reports the new version.
 - GitHub setup: repo variable `TS_OAUTH_CLIENT_ID`; environments `dev` (no gate) and `production` (requires my approval).
 - `.gitattributes` keeps Linux line endings on scripts and YAML.
@@ -293,7 +312,7 @@
 
 ### Docs - Dev to prod release flow
 
-- Rewrote `docs/environments.md` around the dev → prod flow: `dev` branch and `jarvis-dev` for testing, `main` and `jarvis-prod` for daily use, prod changes only through an approved merge.
+- Rewrote `docs/environments.md` around the dev â†’ prod flow: `dev` branch and `jarvis-dev` for testing, `main` and `jarvis-prod` for daily use, prod changes only through an approved merge.
 - README: added a "How I ship changes" section, updated the repo layout, and made the roadmap match what is actually built.
 
 ### Infra - Dev environment

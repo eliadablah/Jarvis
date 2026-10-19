@@ -20,6 +20,13 @@ import { isStartupCrash } from "./steps.ts";
 const FIVE_HOURS = 300;
 const WEEK = 10080;
 
+/** Fresh, unexpired windows only. Old readings must not strand an otherwise usable provider. */
+export function quotaPressure(limits: AgentLimits | undefined, now = Date.now()): number | undefined {
+  if (!limits || now - Date.parse(limits.updatedAt) > 35 * 60_000 || Date.parse(limits.updatedAt) > now + 5 * 60_000) return;
+  const resets = [limits.fiveHour, limits.week].filter(w => w && Number.isFinite(w.usedPercent) && w.usedPercent >= 90 && w.resetsAt * 1000 > now).map(w => w!.resetsAt * 1000);
+  return resets.length ? Math.max(...resets) : undefined;
+}
+
 const percent = (fraction: number): number => Math.round(fraction * 1000) / 10;
 
 /** One parsed Claude stream event to a reading, or undefined for any other event. */
