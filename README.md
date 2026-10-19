@@ -2,7 +2,7 @@
 
 My personal AI assistant. I talk to it out loud, it remembers what I'm working on, and it can take real actions on my machine, when I explicitly request a scoped task.
 
-I'm building Jarvis as a hands-on DevOps project: I put it together, locked it down, and I'm moving it from my PC to the cloud with Terraform, separate dev and prod environments, and a dev â†’ prod release flow.
+I'm building Jarvis as a hands-on DevOps project: I put it together, locked it down, and I'm moving it from my PC to the cloud with Terraform, separate dev and prod environments, and a dev → prod release flow.
 
 ## What it does
 
@@ -17,7 +17,7 @@ I'm building Jarvis as a hands-on DevOps project: I put it together, locked it d
 | Layer | What runs it | My setup |
 |---|---|---|
 | Brain | Claude Code, Codex, or Gemini | Jarvis persona, selectable web engine, shared vault |
-| Memory | Obsidian vault | Raw (inbox) â†’ Wiki (clean notes) â†’ Outputs (finished reports) |
+| Memory | Obsidian vault | Raw (inbox) → Wiki (clean notes) → Outputs (finished reports) |
 | Voice | Local speech-to-text and text-to-speech | Push-to-talk, British male voice, ask-before-acting |
 | Face | Browser visualizer | Full-screen circuit-board scene |
 | Servers | AWS Lightsail, built with Terraform | `jarvis-dev` for testing, `jarvis-prod` for daily use |
@@ -25,7 +25,7 @@ I'm building Jarvis as a hands-on DevOps project: I put it together, locked it d
 ## How I ship changes
 
 ```text
-dev branch  â†’  test on jarvis-dev  â†’  pull request  â†’  main branch  â†’  approve  â†’  jarvis-prod
+dev branch  →  test on jarvis-dev  →  pull request  →  main branch  →  approve  →  jarvis-prod
 ```
 
 Nothing reaches prod without passing through dev first. Details in [docs/environments.md](docs/environments.md).

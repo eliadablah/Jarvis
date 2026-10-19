@@ -59,7 +59,7 @@ The installer sets up a pinned standalone official Codex CLI and a trusted CA bu
 
     powershell -ExecutionPolicy Bypass -File pc-worker/restart.ps1
 
-A worker started inside another coding agent can inherit that agentâ€™s read-only permission profile. Restarting from normal PowerShell or the registered logon task starts the worker with its configured workspace permissions. Never remove a managed permission profile inside a restricted session.
+A worker started inside another coding agent can inherit that agent’s read-only permission profile. Restarting from normal PowerShell or the registered logon task starts the worker with its configured workspace permissions. Never remove a managed permission profile inside a restricted session.
 
 Use a standalone official Codex CLI for unattended work rather than the desktop app bundled alpha binary. Keep its auth/runtime cache separate in %USERPROFILE%\.jarvis\codex; authenticate that cache with the official Codex login flow. Credentials, settings, reports and caches never belong in the repository.
 
