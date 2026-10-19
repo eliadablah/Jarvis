@@ -11,6 +11,23 @@ export function mountPcActivity({ api, safe, modal, toast, navigate }) {
   const labels = { queued: 'Queued', running: 'Running', cancelling: 'Stopping', completed: 'Completed', partial: 'Partly completed', needs_input: 'Needs you', needs_attention: 'Connection lost · review', failed: 'Failed', cancelled: 'Cancelled', done: 'Legacy run · see report' };
   let state = { tasks: [], executors: [] }, loading = false, firstLoad = true;
   const observed = new Map();
+  // --- Live view: a running task shows that the PC is working, not just a status word ---
+  const fmt = ms => { const s = Math.max(0, Math.round(ms / 1000)); return s < 60 ? s + 's' : Math.floor(s / 60) + 'm ' + String(s % 60).padStart(2, '0') + 's'; };
+  const since = iso => iso ? fmt(Date.now() - Date.parse(iso)) : '';
+  function liveBlock(task) {
+    if (!['running', 'cancelling'].includes(task.status)) return '';
+    const beat = Date.parse(task.heartbeatAt || task.startedAt || task.createdAt);
+    const quiet = Date.now() - beat > 60000;
+    const feed = (task.activity || []).slice(-6, -1).reverse().map(a => '<li><span>' + safe(a.text.slice(0, 110)) + '</span><small data-pc-ago="' + safe(a.at) + '"></small></li>').join('');
+    return '<div class="pc-live' + (quiet ? ' quiet' : '') + '"><div class="pc-live-top"><span class="pc-pulse" aria-hidden="true"><i></i><i></i><i></i><i></i></span><strong>' +
+      safe((task.progress || 'Working').slice(0, 140)) + '</strong></div><div class="pc-live-meta">Working for <b data-pc-elapsed="' + safe(task.startedAt || task.createdAt) + '"></b> · last signal <b data-pc-ago="' + safe(task.heartbeatAt || '') + '"></b> ago' +
+      (quiet ? ' · <em>quiet for a while: the agent may be thinking or stuck</em>' : '') + '</div>' + (feed ? '<ul class="pc-live-feed">' + feed + '</ul>' : '') + '</div>';
+  }
+  const ticker = () => {
+    document.querySelectorAll('[data-pc-elapsed]').forEach(n => { n.textContent = since(n.dataset.pcElapsed); });
+    document.querySelectorAll('[data-pc-ago]').forEach(n => { if (n.dataset.pcAgo) n.textContent = since(n.dataset.pcAgo) + (n.tagName === 'SMALL' ? ' ago' : ''); });
+  };
+  setInterval(() => { if (!document.hidden) ticker(); }, 1000);
   async function refresh() {
     if (loading) return; loading = true;
     try {
@@ -28,12 +45,12 @@ export function mountPcActivity({ api, safe, modal, toast, navigate }) {
       document.querySelector('#pc-agents-summary').textContent = ready.length+' agents · browser actions '+(ready.some(e=>e.capabilities.includes('browser.execute'))?'ready':'needs update')+' · Windows '+(ready.some(e=>e.capabilities.includes('computer'))?'ready':'needs setup');
       const html = state.tasks.length ? state.tasks.slice(0, 12).map(task =>
         '<article class="pc-task" data-status="' + safe(task.status) + '"><div class="pc-task-top"><span class="tag">' + safe(labels[task.status] || task.status) +
-        '</span><small>' + safe(task.executor || task.plan?.kind || 'PC') + '</small></div><h3>' + safe(task.request) + '</h3><p>' +
-        safe((task.progress || task.result || 'Waiting for a capable local agent.').slice(0,220)) + '</p><div class="pc-task-actions"><button class="text-btn" data-pc-report="' +
+        '</span><small>' + safe(task.executor || task.plan?.kind || 'PC') + '</small></div><h3>' + safe(task.request) + '</h3>' + (liveBlock(task) || '<p>' +
+        safe((task.progress || task.result || 'Waiting for a capable local agent.').slice(0,220)) + '</p>') + '<div class="pc-task-actions"><button class="text-btn" data-pc-report="' +
         safe(task.id) + '">Details</button>' + (['queued','running'].includes(task.status) ? '<button class="text-btn" data-pc-cancel="' +
         safe(task.id) + '">Cancel task</button>' : '') + '</div></article>').join('') :
         '<div class="pc-empty"><strong>Start with a clear request.</strong><p>“Find support jobs, but do not apply.”<br>“In my assistant workspace, create a budget template.”<br>“Open Calculator.”</p></div>';
-      const list = document.querySelector('#pc-task-list'); if (list.innerHTML !== html) list.innerHTML = html;
+      const list = document.querySelector('#pc-task-list'); if (list.innerHTML !== html) { list.innerHTML = html; ticker(); }
     } catch {
       document.querySelector('#pc-connection').textContent = 'Connection unavailable';
       document.querySelector('#pc-agents-summary').textContent = 'Last known activity · reconnecting';
@@ -63,7 +80,10 @@ export function mountPcActivity({ api, safe, modal, toast, navigate }) {
       '</strong><p>' + safe(e.reason) + '</p><small>' + safe(e.capabilities.join(', ')) +
       (e.retryAt ? ' · retry after ' + safe(new Date(e.retryAt).toLocaleTimeString()) : '') + '</small></div>').join('') +
     '<p>Exact remaining tokens are unavailable. Usage-limit refusals pause that agent; fallback only happens before any tools run. Approved folders are configured on your PC.</p>');
-  void refresh(); setInterval(() => { if (!document.hidden) void refresh(); }, 10000);
+  // Every 3 seconds while a task is running (so steps show up live), every 10 otherwise.
+  const busy = () => state.tasks.some(t => ['running', 'cancelling'].includes(t.status));
+  (function poll() { setTimeout(async () => { if (!document.hidden) await refresh(); poll(); }, busy() ? 3000 : 10000); })();
+  void refresh();
   document.addEventListener('visibilitychange', () => { if (!document.hidden) void refresh(); });
   return { refresh, open: () => navigate('pc') };
 }

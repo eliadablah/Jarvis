@@ -119,3 +119,17 @@ Wording is cleaned up in `app/src/pcTasks/phrasing.ts`, then the strict protocol
 ### Run-on-my-PC offers
 
 When Eli states or asks for something chat cannot do (a payday for his calendar, a file to organize), the persona has the model end its reply with one `PC_TASK browser|computer: ...` line. The dashboard hides that line and shows it as a card with the exact task and a Run button (`app/public/pcOffer.js`). Nothing runs until Eli taps Run; the tap sends it as "In my Chrome, execute this task: ..." or "On my PC, execute this task: ...", validated like any typed command. The model's line is only a suggestion and is never executed on its own.
+
+## Live view while the PC works
+
+A running task shows that it is working, not just a status word. The PC activity card shows a pulsing indicator, the current step in plain words ("Opening linkedin.com", "Clicking", "Reading the page"), how long it has been working, how long ago the PC last reported in, and the last few steps. The page polls every 3 seconds while a task runs.
+
+- The worker turns each agent tool event into a short sentence (`pc-worker/steps.ts`). Only the kind of step and a hostname appear: never typed text, commands, file contents or full URLs.
+- Each new step is reported right away (at most every 2 seconds); the server keeps the last 12 distinct steps per task (`activity`).
+- If the PC has been silent for over a minute the card turns amber and says the agent may be thinking or stuck.
+
+## Windows startup crashes
+
+On this PC, code injected into new processes sometimes crashes them at startup (access violation `0xC0000005` and similar). If an agent dies to one of those crash codes before it has run any tool or produced any result, nothing can have happened yet, so the worker starts it again, up to three attempts, and shows "crashed while starting, trying again" in the live view. A crash after a tool has run is never retried.
+
+For local development, `npm run test:local` runs the app tests without a subprocess per test file, which avoids most random launch failures. CI uses the normal `npm test`.

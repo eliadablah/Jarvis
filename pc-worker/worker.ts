@@ -59,8 +59,9 @@ export async function deliverReport(settings: WorkerSettings, state: LocalState)
 }
 async function execute(settings: WorkerSettings, state: LocalState, task: ClaimedTask): Promise<PcReport> {
   const controller = new AbortController();
-  let progress = "Choosing a capable agent.", executor: string | undefined, lastContact = Date.now(), finished = false;
+  let progress = "Choosing a capable agent.", executor: string | undefined, lastContact = Date.now(), finished = false, lastBeat = 0;
   const heartbeat = async () => {
+    lastBeat = Date.now();
     try {
       const response = await call(settings, "/api/pc/tasks/" + task.id + "/heartbeat",
         { workerId: state.workerId, lease: task.lease, progress, executor });
@@ -78,7 +79,11 @@ async function execute(settings: WorkerSettings, state: LocalState, task: Claime
       if (controller.signal.aborted) break;
       if (agentStatuses(settings, state.cooldowns).find(e => e.id === id)?.state !== "ready") continue;
       executor = id; progress = "Starting " + id + "."; await heartbeat();
-      const run = await runAgent(id, settings, task, controller.signal, text => { progress = text; });
+      // Each new live step is reported right away (at most every 2 seconds) so the dashboard can show the PC working.
+      const run = await runAgent(id, settings, task, controller.signal, text => {
+        progress = text;
+        if (!finished && Date.now() - lastBeat >= 2000) void heartbeat();
+      });
       result = run.report;
       if (run.failure) {
         const wait = { until: Date.now() + (run.failure === "quota" ? 15 * 60_000 : 60_000), reason: run.report.summary };

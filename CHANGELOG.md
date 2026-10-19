@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-10-19
+
+### Feature - Live "PC is working" view, and retry on Windows startup crashes
+
+- The PC activity card now shows a running task as working: a pulsing indicator, the current step in plain words, a running timer, "last signal Ns ago", and the last few steps. It polls every 3 seconds while a task runs and turns amber if the PC is silent for a minute.
+- The worker describes each agent tool event as a short sentence (`pc-worker/steps.ts`), never including typed text, commands, file contents or full URLs, and reports every new step at once (at most every 2 seconds). The server keeps the last 12 distinct steps per task.
+- Root-cause work on the random launch failures found code injected into new processes crashing some of them at startup (a launch with no console window failed 4-6 of 40 times in a test; one with a console 0 of 40). Now an agent that dies to a Windows crash code before it ran any tool or produced a result is started again, up to three attempts; anything after a tool has run is never retried. Added `npm run test:local` (no subprocess per test file) as a development workaround.
+- Tests: 96 app tests and 24 worker tests passing (new: step descriptions without private content, startup-crash detection, the server's step feed).
+
 ## 2026-10-17
 
 ### Feature - Everyday command phrasing, and tap-to-run offers for things chat can't do

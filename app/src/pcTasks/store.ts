@@ -9,8 +9,11 @@ export interface PcTask {
   id: string; kind: PcPlan["kind"]; request: string; displayRequest?: string; plan?: PcPlan; status: PcTaskStatus;
   createdAt: string; startedAt?: string; finishedAt?: string; result?: string;
   workerId?: string; lease?: string; heartbeatAt?: string; executor?: string; progress?: string;
+  /** The last few distinct live steps the PC reported, newest last (for the dashboard's live view). */
+  activity?: { at: string; text: string }[];
   cancelRequested?: boolean; report?: PcReport; reportId?: string; requestId?: string;
 }
+export const MAX_ACTIVITY = 12;
 export interface PcTaskState { tasks: PcTask[]; workerSeenAt?: string; workerId?: string; executors?: ExecutorStatus[]; }
 export const LEASE_MS = 120_000;
 const pending = new Map<string, Promise<unknown>>();
@@ -86,6 +89,10 @@ export function heartbeatPcTask(dir: string, id: string, workerId: string, lease
     if (!task || !["running", "cancelling"].includes(task.status)) return;
     state.workerSeenAt = now.toISOString(); task.heartbeatAt = now.toISOString();
     task.progress = progress.slice(0, 300); if (executor) task.executor = executor.slice(0, 60);
+    // Keep each new step once (a repeated heartbeat with the same text adds nothing).
+    const feed = task.activity ??= [];
+    if (feed.at(-1)?.text !== task.progress) feed.push({ at: now.toISOString(), text: task.progress });
+    if (feed.length > MAX_ACTIVITY) feed.splice(0, feed.length - MAX_ACTIVITY);
     return { cancelRequested: task.cancelRequested === true };
   }, now);
 }

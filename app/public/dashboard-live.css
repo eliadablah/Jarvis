@@ -3,6 +3,26 @@
 .model-status { margin: 12px 0; padding: 12px 0; border-bottom: 1px solid var(--line); }
 .model-status strong { display: block; margin: 7px 0; }
 .model-status p { margin: 5px 0; }
+/* Live PC view (pcActivity.js): shows the PC working, with a timer and the latest steps. */
+.pc-live { margin: 8px 0 4px; padding: 12px 14px; border-radius: 12px; background: color-mix(in srgb, var(--mint, #b8eccb) 7%, transparent); border: 1px solid color-mix(in srgb, var(--mint, #b8eccb) 24%, transparent); }
+.pc-live.quiet { border-color: color-mix(in srgb, var(--gold, #dec998) 45%, transparent); background: color-mix(in srgb, var(--gold, #dec998) 7%, transparent); }
+.pc-live-top { display: flex; align-items: center; gap: 12px; }
+.pc-live-top strong { font-size: 14px; line-height: 1.4; overflow-wrap: anywhere; }
+.pc-live-meta { margin-top: 6px; font-size: 12px; color: var(--muted, #86958c); }
+.pc-live-meta b { color: inherit; font-weight: 600; font-variant-numeric: tabular-nums; }
+.pc-live-meta em { color: var(--gold, #dec998); font-style: normal; }
+.pc-live-feed { list-style: none; margin: 10px 0 0; padding: 8px 0 0; border-top: 1px solid var(--line, #29352f); display: grid; gap: 4px; }
+.pc-live-feed li { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; color: var(--muted, #86958c); }
+.pc-live-feed small { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.pc-pulse { display: inline-flex; align-items: flex-end; gap: 3px; height: 18px; flex-shrink: 0; }
+.pc-pulse i { width: 4px; height: 100%; border-radius: 2px; background: var(--mint, #b8eccb); transform-origin: bottom; animation: pc-bars 1s ease-in-out infinite; }
+.pc-pulse i:nth-child(2) { animation-delay: .15s; }
+.pc-pulse i:nth-child(3) { animation-delay: .3s; }
+.pc-pulse i:nth-child(4) { animation-delay: .45s; }
+.pc-live.quiet .pc-pulse i { animation-play-state: paused; opacity: .4; }
+@keyframes pc-bars { 0%, 100% { transform: scaleY(.25); } 50% { transform: scaleY(1); } }
+@media (prefers-reduced-motion: reduce) { .pc-pulse i { animation: none; transform: scaleY(.7); } }
+
 /* "Run this on my PC" offer (pcOffer.js): sits above the command bar until tapped or dismissed. */
 .pc-offer {
   position: fixed;

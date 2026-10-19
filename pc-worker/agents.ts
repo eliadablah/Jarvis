@@ -1,4 +1,5 @@
 import { desktopMcp, desktopCodexArgs, chromeCodexArgs } from "./desktopConfig.ts";
+import { describeStep, isStartupCrash } from "./steps.ts";
 import { spawn, type ChildProcess } from "node:child_process";
 import { readFile, realpath, mkdtemp, writeFile, open, unlink, rmdir } from "node:fs/promises";
 import { createHash } from "node:crypto";
@@ -12,7 +13,9 @@ export interface WorkerSettings {
   windowsMcpCommand?: string; chromeMcpPython?: string; maxApplications?: number; codexHome?: string; workspaces?: Record<string, string>; lockPort?: number;
 }
 export interface ClaimedTask { id: string; request: string; plan: PcPlan; workerId: string; lease: string; }
-export interface AgentRun { report: PcReport; failure?: "quota" | "authentication" | "unavailable"; safeToRetry: boolean }
+export interface AgentRun { report: PcReport; failure?: "quota" | "authentication" | "unavailable"; safeToRetry: boolean; startupCrash?: boolean }
+/** Windows crashes some new processes at startup on this PC; before any tool runs, trying again is safe. */
+const STARTUP_ATTEMPTS = 3;
 export type Cooldowns = Record<string, { until: number; reason: string }>;
 export function agentStatuses(settings: WorkerSettings, cooldowns: Cooldowns, now = Date.now()): ExecutorStatus[] {
   return [
@@ -129,7 +132,16 @@ export async function stopTree(child: ChildProcess): Promise<void> {
     try { process.kill(-child.pid, "SIGTERM"); } catch { child.kill("SIGTERM"); }
   }
 }
+/** Runs an agent, retrying a launch that Windows crashed before the agent did anything. */
 export async function runAgent(id: string, settings: WorkerSettings, task: ClaimedTask, signal: AbortSignal, progress: (text: string) => void, diagnostic?: (text: string) => void): Promise<AgentRun> {
+  for (let attempt = 1; ; attempt++) {
+    const run = await runAgentOnce(id, settings, task, signal, progress, diagnostic);
+    if (!run.startupCrash || attempt >= STARTUP_ATTEMPTS || signal.aborted) return run;
+    progress(id + " crashed while starting (a Windows launch problem). Trying again (" + (attempt + 1) + " of " + STARTUP_ATTEMPTS + ").");
+    await new Promise(resolve => setTimeout(resolve, 1500 * attempt));
+  }
+}
+async function runAgentOnce(id: string, settings: WorkerSettings, task: ClaimedTask, signal: AbortSignal, progress: (text: string) => void, diagnostic?: (text: string) => void): Promise<AgentRun> {
   if (task.plan.kind === "desktop") return openApp(task.plan.app, signal);
   let cwd = settings.jobsDir;
   if (task.plan.kind === "workspace") {
@@ -162,9 +174,10 @@ export async function runAgent(id: string, settings: WorkerSettings, task: Claim
         env: { ...process.env, CLAUDE_CODE_OAUTH_TOKEN: undefined, PC_WORKER_TOKEN: undefined, ...(isCodex && settings.codexHome ? { CODEX_HOME: settings.codexHome, CODEX_CA_CERTIFICATE: join(settings.codexHome, "ca-bundle.pem") } : {}) },
       });
     } catch {
-      void dispose().finally(() => resolve({ report: emptyReport("needs_input", "Windows could not start " + id + "."), failure: "unavailable", safeToRetry: true }));
+      void dispose().finally(() => resolve({ report: emptyReport("needs_input", "Windows could not start " + id + "."), failure: "unavailable", safeToRetry: true, startupCrash: true }));
       return;
     }
+    const startedAt = Date.now();
     let buffer = "", diagnostics = "", candidate: unknown, touchedTools = false, completed = false, settled = false;
     let outOffset = 0, errOffset = 0, killTimer: ReturnType<typeof setTimeout> | undefined;
     const timer = setTimeout(() => { diagnostics = "Execution timeout."; abort(); }, 2 * 60 * 60_000);
@@ -181,7 +194,10 @@ export async function runAgent(id: string, settings: WorkerSettings, task: Claim
       let e; try { e = JSON.parse(line); } catch { return; }
       const tool = e.type === "assistant" && e.message?.content?.some((c: {type: string; name: string}) => c.type === "tool_use" && mayHaveActed(c.name)) ||
         (e.type === "item.started" || e.type === "item.completed") && !["agent_message", "reasoning", "error"].includes(e.item?.type);
-      if (tool) { touchedTools = true; progress(id + " is using its tools."); }
+      if (tool) touchedTools = true;
+      // A plain sentence for the live PC activity view (never typed text or commands).
+      const step = describeStep(e);
+      if (step) progress(step); else if (tool) progress(id + " is working.");
       if (e.type === "result") { candidate = e.structured_output; if (candidate === undefined && typeof e.result === "string") { try { candidate = JSON.parse(e.result); } catch {} } completed = !e.is_error; diagnostics += " " + String(e.result ?? ""); }
       if (e.type === "item.completed" && e.item?.type === "agent_message") { try { candidate = JSON.parse(e.item.text); } catch {} }
       if (e.type === "turn.completed") completed = true;
@@ -210,7 +226,7 @@ export async function runAgent(id: string, settings: WorkerSettings, task: Claim
     const poller = setInterval(() => { void drain().catch(() => abort()); }, 500);
     child.once("error", () => {
       if (settled) return; settled = true; cleanup();
-      void chain.catch(() => {}).then(dispose).finally(() => resolve({ report: emptyReport("needs_input", "Could not start " + id + " on the PC."), failure: "unavailable", safeToRetry: true }));
+      void chain.catch(() => {}).then(dispose).finally(() => resolve({ report: emptyReport("needs_input", "Could not start " + id + " on the PC."), failure: "unavailable", safeToRetry: true, startupCrash: true }));
     });
     child.once("close", () => { void finish(); });
     async function finish() {
@@ -226,6 +242,9 @@ export async function runAgent(id: string, settings: WorkerSettings, task: Claim
           try { return resolve(reportedRun(candidate, plan, touchedTools)); } catch {}
         }
         diagnostic?.(diagnostics);
+        // Windows killed it at startup before it did anything: safe to try again.
+        if (isStartupCrash(child.exitCode, { touchedTools, hasResult: candidate !== undefined, elapsedMs: Date.now() - startedAt }))
+          return resolve({ report: emptyReport("needs_input", id + " crashed while starting (a Windows launch problem)."), failure: "unavailable", safeToRetry: true, startupCrash: true });
         const failure = refusal(diagnostics);
         resolve({ report: emptyReport("needs_input", failure === "quota" ? id + " reached a usage limit." : failure === "authentication" ? id + " needs its local sign-in renewed." :
           "The agent did not return a valid verified result. Review its work before retrying."), failure, safeToRetry: !touchedTools && Boolean(failure) });
