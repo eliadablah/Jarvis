@@ -1,9 +1,10 @@
 // PC activity is shared by all three dashboard views.
+import { renderLimits } from './limits.js';
 export function mountPcActivity({ api, safe, modal, toast, navigate }) {
   const grid = document.querySelector('.dashboard-grid');
   const card = document.createElement('section');
   card.className = 'card pc-activity'; card.dataset.section = 'pc';
-  card.innerHTML = '<div class="card-head"><div><div class="eyebrow">FROM REQUEST TO RESULT</div><h2>PC activity</h2></div><span class="tag" id="pc-connection">Checking PC</span></div><p class="pc-help">Ask Jarvis to complete a browser task, work with your files, or control a Windows app.</p><div id="pc-task-list" aria-live="polite"></div><div class="card-foot"><span id="pc-agents-summary">Checking local agents</span><button class="text-btn" id="pc-agents">PC agents ↗</button></div>';
+  card.innerHTML = '<div class="card-head"><div><div class="eyebrow">FROM REQUEST TO RESULT</div><h2>PC activity</h2></div><span class="tag" id="pc-connection">Checking PC</span></div><p class="pc-help">Ask Jarvis to complete a browser task, work with your files, or control a Windows app.</p><div class="pc-limits" id="pc-limits" aria-label="Claude and Codex usage limits"><div class="limits"></div></div><div id="pc-task-list" aria-live="polite"></div><div class="card-foot"><span id="pc-agents-summary">Checking local agents</span><button class="text-btn" id="pc-agents">PC agents ↗</button></div>';
   grid.append(card);
   const nav = document.createElement('button'); nav.className = 'nav-item'; nav.dataset.view = 'pc';
   nav.innerHTML = '<span aria-hidden="true">▣</span><span>PC activity</span>';
@@ -11,6 +12,15 @@ export function mountPcActivity({ api, safe, modal, toast, navigate }) {
   const labels = { queued: 'Queued', running: 'Running', cancelling: 'Stopping', completed: 'Completed', partial: 'Partly completed', needs_input: 'Needs you', needs_attention: 'Connection lost · review', failed: 'Failed', cancelled: 'Cancelled', done: 'Legacy run · see report' };
   let state = { tasks: [], executors: [] }, loading = false, firstLoad = true;
   const observed = new Map();
+  // Usage limits: bars in this card and a copy in the side panel that is always on screen.
+  const sideBox = (() => {
+    const connections = document.querySelector('.connections');
+    if (!connections) return null;
+    const eyebrow = document.createElement('div'); eyebrow.className = 'eyebrow limits-eyebrow'; eyebrow.textContent = 'USAGE LIMITS';
+    const box = document.createElement('div'); box.className = 'limits'; box.id = 'side-limits';
+    connections.append(eyebrow, box); return box;
+  })();
+  const drawLimits = limits => { renderLimits(document.querySelector('#pc-limits .limits'), limits); renderLimits(sideBox, limits); };
   // --- Live view: a running task shows that the PC is working, not just a status word ---
   const fmt = ms => { const s = Math.max(0, Math.round(ms / 1000)); return s < 60 ? s + 's' : Math.floor(s / 60) + 'm ' + String(s % 60).padStart(2, '0') + 's'; };
   const since = iso => iso ? fmt(Date.now() - Date.parse(iso)) : '';
@@ -38,6 +48,7 @@ export function mountPcActivity({ api, safe, modal, toast, navigate }) {
         observed.set(task.id, task.status);
       }
       state = next; firstLoad = false;
+      drawLimits(state.limits);
       document.querySelector('#pc-connection').textContent = !state.enabled ? 'Not enabled' : state.workerOnline ? 'PC online' : 'PC offline';
       const row = document.querySelectorAll('.connections .connection-row')[2];
       if (row) { row.querySelector('span').textContent = 'PC worker'; row.querySelector('.connection-status').textContent = state.workerOnline ? 'Online' : 'Offline'; }

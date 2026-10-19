@@ -3,9 +3,10 @@ import { appendFile, readFile, mkdir, access } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
-import { PC_PROTOCOL, emptyReport, type PcReport } from "../app/src/pcTasks/protocol.ts";
+import { PC_PROTOCOL, emptyReport, type PcLimits, type PcReport } from "../app/src/pcTasks/protocol.ts";
 import { parsePcIntent } from "../app/src/pcTasks/intent.ts";
 import { agentStatuses, chooseAgents, canFallback, runAgent, type ClaimedTask, type WorkerSettings } from "./agents.ts";
+import { codexSessionDirs, newerLimits, probeClaudeLimits, readCodexLimits } from "./limits.ts";
 import { readState, saveState, acquireWorkerLock, type LocalState } from "./persistence.ts";
 export { jobPrompt } from "./agents.ts";
 const STATE_DIR = join(homedir(), ".jarvis");
@@ -57,6 +58,20 @@ export async function deliverReport(settings: WorkerSettings, state: LocalState)
   });
   if (!response.ok) throw new Error("Report retained locally; server returned HTTP " + response.status + ".");
 }
+// --- Usage limits: the latest Claude and Codex readings, sent with every claim and heartbeat ---
+const limits: PcLimits = {};
+let lastCodexRead = 0, lastClaudeProbe = 0;
+async function refreshLimits(settings: WorkerSettings, idle: boolean): Promise<void> {
+  const now = Date.now();
+  // Codex: the newest session log has the newest reading (nothing is spent).
+  if (now - lastCodexRead > 60_000) { lastCodexRead = now; limits.codex = newerLimits(limits.codex, await readCodexLimits(codexSessionDirs(settings.codexHome))); }
+  // Claude: every agent run reports it for free. After 30 quiet minutes, ask the cheapest model one word.
+  const age = limits.claude ? now - Date.parse(limits.claude.updatedAt) : Infinity;
+  if (idle && settings.claudeBin && age > 30 * 60_000 && now - lastClaudeProbe > 30 * 60_000) {
+    lastClaudeProbe = now;
+    limits.claude = newerLimits(limits.claude, await probeClaudeLimits(settings.claudeBin));
+  }
+}
 async function execute(settings: WorkerSettings, state: LocalState, task: ClaimedTask): Promise<PcReport> {
   const controller = new AbortController();
   let progress = "Choosing a capable agent.", executor: string | undefined, lastContact = Date.now(), finished = false, lastBeat = 0;
@@ -64,7 +79,7 @@ async function execute(settings: WorkerSettings, state: LocalState, task: Claime
     lastBeat = Date.now();
     try {
       const response = await call(settings, "/api/pc/tasks/" + task.id + "/heartbeat",
-        { workerId: state.workerId, lease: task.lease, progress, executor });
+        { workerId: state.workerId, lease: task.lease, progress, executor, limits });
       if (response.status === 409 || response.status === 401) { controller.abort("ownership_lost"); return; }
       if (!response.ok) throw new Error();
       lastContact = Date.now();
@@ -72,7 +87,7 @@ async function execute(settings: WorkerSettings, state: LocalState, task: Claime
     } catch { if (Date.now() - lastContact > 60_000) controller.abort("connection_lost"); }
   };
   await heartbeat();
-  const pump = (async () => { while (!finished && !controller.signal.aborted) { await sleep(HEARTBEAT_MS); if (!finished) await heartbeat(); } })();
+  const pump = (async () => { while (!finished && !controller.signal.aborted) { await sleep(HEARTBEAT_MS); if (!finished) { await refreshLimits(settings, false).catch(() => {}); await heartbeat(); } } })();
   try {
     let result = emptyReport("needs_input", "No available agent has this task's tools.");
     for (const id of chooseAgents(task.plan, agentStatuses(settings, state.cooldowns))) {
@@ -83,7 +98,7 @@ async function execute(settings: WorkerSettings, state: LocalState, task: Claime
       const run = await runAgent(id, settings, task, controller.signal, text => {
         progress = text;
         if (!finished && Date.now() - lastBeat >= 2000) void heartbeat();
-      });
+      }, undefined, reading => { limits.claude = newerLimits(limits.claude, reading); });
       result = run.report;
       if (run.failure) {
         const wait = { until: Date.now() + (run.failure === "quota" ? 15 * 60_000 : 60_000), reason: run.report.summary };
@@ -122,9 +137,10 @@ async function main(): Promise<void> {
         log("report acknowledged: " + state.outbox.task.id + " " + state.outbox.report.outcome);
         delete state.outbox; delete state.active; await saveState(STATE_DIR, state);
       }
+      await refreshLimits(settings, true).catch(() => {});
       const executors = agentStatuses(settings, state.cooldowns).map(e => state.recoveryHold ?
         { ...e, state: "unavailable" as const, reason: "Interrupted run needs local review. Worker is paused to prevent duplicate actions." } : e);
-      const response = await call(settings, "/api/pc/tasks/claim", { workerId: state.workerId, executors });
+      const response = await call(settings, "/api/pc/tasks/claim", { workerId: state.workerId, executors, limits });
       if (response.status === 204) { await sleep(POLL_MS); continue; }
       if (!response.ok) throw new Error("Claim failed: HTTP " + response.status);
       const task = validateClaim((await response.json() as {task: unknown}).task, state.workerId);

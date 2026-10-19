@@ -4,6 +4,24 @@
 .model-status strong { display: block; margin: 7px 0; }
 .model-status p { margin: 5px 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .schedule-toggle { margin-top: 4px; font-size: 12px; }
+/* Claude and Codex usage limits (limits.js): two bars each, 5-hour and weekly. */
+.limits { display: grid; gap: 12px; }
+.limit-block { display: grid; gap: 5px; }
+.limit-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.limit-head strong { font-size: 12px; }
+.limit-head small { color: var(--muted, #86958c); font-size: 10px; }
+.limit-row { display: grid; grid-template-columns: 44px 1fr auto; align-items: center; gap: 8px; font-size: 11px; }
+.limit-label { color: var(--muted, #86958c); }
+.limit-text { color: var(--muted, #86958c); text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.limit-bar { height: 6px; border-radius: 999px; background: color-mix(in srgb, var(--muted, #86958c) 22%, transparent); overflow: hidden; }
+.limit-bar i { display: block; height: 100%; border-radius: 999px; transition: width .4s ease; background: var(--mint, #b8eccb); }
+.limit-bar[data-tone="mid"] i { background: var(--gold, #dec998); }
+.limit-bar[data-tone="high"] i { background: #e58b8b; }
+.limits-eyebrow { margin-top: 18px; }
+.pc-limits { margin: 4px 0 14px; padding: 12px 14px; border: 1px solid var(--line, #29352f); border-radius: 12px; }
+.pc-limits .limits { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px; }
+@media (prefers-reduced-motion: reduce) { .limit-bar i { transition: none; } }
+
 /* Live PC view (pcActivity.js): shows the PC working, with a timer and the latest steps. */
 .pc-live { margin: 8px 0 4px; padding: 12px 14px; border-radius: 12px; background: color-mix(in srgb, var(--mint, #b8eccb) 7%, transparent); border: 1px solid color-mix(in srgb, var(--mint, #b8eccb) 24%, transparent); }
 .pc-live.quiet { border-color: color-mix(in srgb, var(--gold, #dec998) 45%, transparent); background: color-mix(in srgb, var(--gold, #dec998) 7%, transparent); }

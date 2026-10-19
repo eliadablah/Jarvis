@@ -1,11 +1,12 @@
 import { desktopMcp, desktopCodexArgs, chromeCodexArgs } from "./desktopConfig.ts";
 import { describeStep, isStartupCrash } from "./steps.ts";
+import { claudeLimitsFromEvent } from "./limits.ts";
 import { spawn, type ChildProcess } from "node:child_process";
 import { readFile, realpath, mkdtemp, writeFile, open, unlink, rmdir } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { join, relative, isAbsolute } from "node:path";
 import { homedir, tmpdir } from "node:os";
-import { capabilityFor, emptyReport, validateReport, type PcPlan, type PcReport, type ExecutorStatus } from "../app/src/pcTasks/protocol.ts";
+import { capabilityFor, emptyReport, validateReport, type AgentLimits, type PcPlan, type PcReport, type ExecutorStatus } from "../app/src/pcTasks/protocol.ts";
 import { fileURLToPath } from "node:url";
 
 export interface WorkerSettings {
@@ -136,15 +137,15 @@ export async function stopTree(child: ChildProcess): Promise<void> {
   }
 }
 /** Runs an agent, retrying a launch that Windows crashed before the agent did anything. */
-export async function runAgent(id: string, settings: WorkerSettings, task: ClaimedTask, signal: AbortSignal, progress: (text: string) => void, diagnostic?: (text: string) => void): Promise<AgentRun> {
+export async function runAgent(id: string, settings: WorkerSettings, task: ClaimedTask, signal: AbortSignal, progress: (text: string) => void, diagnostic?: (text: string) => void, onLimits?: (limits: AgentLimits) => void): Promise<AgentRun> {
   for (let attempt = 1; ; attempt++) {
-    const run = await runAgentOnce(id, settings, task, signal, progress, diagnostic);
+    const run = await runAgentOnce(id, settings, task, signal, progress, diagnostic, onLimits);
     if (!run.startupCrash || attempt >= STARTUP_ATTEMPTS || signal.aborted) return run;
     progress(id + " crashed while starting (a Windows launch problem). Trying again (" + (attempt + 1) + " of " + STARTUP_ATTEMPTS + ").");
     await new Promise(resolve => setTimeout(resolve, 1500 * attempt));
   }
 }
-async function runAgentOnce(id: string, settings: WorkerSettings, task: ClaimedTask, signal: AbortSignal, progress: (text: string) => void, diagnostic?: (text: string) => void): Promise<AgentRun> {
+async function runAgentOnce(id: string, settings: WorkerSettings, task: ClaimedTask, signal: AbortSignal, progress: (text: string) => void, diagnostic?: (text: string) => void, onLimits?: (limits: AgentLimits) => void): Promise<AgentRun> {
   if (task.plan.kind === "desktop") return openApp(task.plan.app, signal);
   let cwd = settings.jobsDir;
   if (task.plan.kind === "workspace") {
@@ -197,6 +198,8 @@ async function runAgentOnce(id: string, settings: WorkerSettings, task: ClaimedT
     signal.addEventListener("abort", abort, { once: true });
     function event(line: string) {
       let e; try { e = JSON.parse(line); } catch { return; }
+      // Claude reports its 5-hour and weekly usage in every stream.
+      if (onLimits && id.startsWith("claude-")) { const reading = claudeLimitsFromEvent(e); if (reading) onLimits(reading); }
       const tool = e.type === "assistant" && e.message?.content?.some((c: {type: string; name: string}) => c.type === "tool_use" && mayHaveActed(c.name)) ||
         (e.type === "item.started" || e.type === "item.completed") && !["agent_message", "reasoning", "error"].includes(e.item?.type);
       if (tool) touchedTools = true;

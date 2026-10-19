@@ -2,7 +2,7 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { parsePcIntent } from "./intent.ts";
-import { MAX_REQUEST_CHARS, capabilityFor, validateReport, type PcPlan, type PcReport, type ExecutorStatus } from "./protocol.ts";
+import { MAX_REQUEST_CHARS, capabilityFor, validateReport, type PcPlan, type PcReport, type ExecutorStatus, type PcLimits } from "./protocol.ts";
 export { MAX_REQUEST_CHARS } from "./protocol.ts";
 export type PcTaskStatus = "queued" | "running" | "cancelling" | "completed" | "partial" | "needs_input" | "needs_attention" | "failed" | "cancelled" | "done";
 export interface PcTask {
@@ -14,7 +14,7 @@ export interface PcTask {
   cancelRequested?: boolean; report?: PcReport; reportId?: string; requestId?: string;
 }
 export const MAX_ACTIVITY = 12;
-export interface PcTaskState { tasks: PcTask[]; workerSeenAt?: string; workerId?: string; executors?: ExecutorStatus[]; }
+export interface PcTaskState { tasks: PcTask[]; workerSeenAt?: string; workerId?: string; executors?: ExecutorStatus[]; limits?: PcLimits; }
 export const LEASE_MS = 120_000;
 const pending = new Map<string, Promise<unknown>>();
 const active = (t: PcTask) => ["queued", "running", "cancelling"].includes(t.status);
@@ -115,6 +115,17 @@ export function cancelPcTask(dir: string, id: string, now = new Date()) {
     if (task.status === "queued") { task.status = "cancelled"; task.finishedAt = now.toISOString(); task.result = "Cancelled before execution."; }
     else if (["running", "cancelling"].includes(task.status)) { task.cancelRequested = true; task.status = "cancelling"; task.progress = "Stop requested. Waiting for the PC to confirm; completed actions cannot be undone."; }
     return task;
+  }, now);
+}
+/** Saves the newest usage-limit readings the PC reported (per provider, the later reading wins). */
+export function setPcLimits(dir: string, limits: PcLimits, now = new Date()) {
+  return mutate(dir, state => {
+    const merged: PcLimits = { ...(state.limits ?? {}) };
+    for (const provider of ["claude", "codex"] as const) {
+      const next = limits[provider];
+      if (next && (!merged[provider] || Date.parse(next.updatedAt) >= Date.parse(merged[provider]!.updatedAt))) merged[provider] = next;
+    }
+    state.limits = merged;
   }, now);
 }
 export function workerOnline(state: PcTaskState, now = Date.now()): boolean {

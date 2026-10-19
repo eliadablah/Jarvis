@@ -4,8 +4,8 @@ import type { AppConfig } from "../config.ts";
 import { ChatRequestError, readBody, checkRequestSource, isValidSessionId } from "../api/chatRequest.ts";
 import { dashboardDir } from "../dashboard.ts";
 import { appHeaders } from "../http/securityHeaders.ts";
-import { PC_PROTOCOL, CAPABILITIES, type ExecutorStatus } from "./protocol.ts";
-import { claimNextPcTask, finishPcTask, heartbeatPcTask, cancelPcTask, pcSnapshot, publicTask, workerOnline, type PcTask } from "./store.ts";
+import { PC_PROTOCOL, CAPABILITIES, sanitizeLimits, type ExecutorStatus } from "./protocol.ts";
+import { claimNextPcTask, finishPcTask, heartbeatPcTask, cancelPcTask, pcSnapshot, publicTask, setPcLimits, workerOnline, type PcTask } from "./store.ts";
 function json(res: ServerResponse, status: number, value?: unknown): void {
   res.writeHead(status, { ...appHeaders(), "Content-Type": "application/json", "Cache-Control": "no-store" });
   res.end(value === undefined ? undefined : JSON.stringify(value));
@@ -38,7 +38,7 @@ export async function handlePcTasks(req: IncomingMessage, res: ServerResponse, p
     if (path === "/api/pc/tasks" && (method === "GET" || method === "HEAD")) {
       const state = await pcSnapshot(dir);
       json(res, 200, { protocol: PC_PROTOCOL, enabled: Boolean(config.pcWorkerToken), workerOnline: workerOnline(state), workerSeenAt: state.workerSeenAt,
-        executors: state.executors ?? [], tasks: state.tasks.slice(-100).reverse().map(publicTask) }); return;
+        executors: state.executors ?? [], limits: state.limits ?? {}, tasks: state.tasks.slice(-100).reverse().map(publicTask) }); return;
     }
     if (method !== "POST") { json(res, 405, { error: "Method not allowed" }); return; }
     const match = /^\/api\/pc\/tasks\/([0-9a-f-]{36})\/(result|heartbeat|cancel)$/.exec(path);
@@ -55,6 +55,8 @@ export async function handlePcTasks(req: IncomingMessage, res: ServerResponse, p
     if (!body || typeof body !== "object" || Array.isArray(body)) throw new ChatRequestError(400, "Expected an object.");
     if (body.protocol !== PC_PROTOCOL) { json(res, 426, { error: "PC worker update required." }); return; }
     if (!uuid(body.workerId)) throw new ChatRequestError(400, "Invalid worker ID.");
+    // Usage limits ride along on claims and heartbeats; a bad reading is ignored, never an error.
+    if (body.limits !== undefined) { const limits = sanitizeLimits(body.limits); if (limits.claude || limits.codex) await setPcLimits(dir, limits); }
     if (path === "/api/pc/tasks/claim") {
       const task = await claimNextPcTask(dir, body.workerId, executorsOf(body.executors));
       if (task) json(res, 200, { task }); else json(res, 204); return;

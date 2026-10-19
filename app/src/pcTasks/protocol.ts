@@ -65,3 +65,37 @@ export function validateReport(value: unknown, plan: PcPlan): PcReport {
   if (plan.kind === "jobs" && plan.action === "submit" && report.outcome === "completed" && report.submitted < plan.maxApplications) report.outcome = "partial";
   return report;
 }
+
+// --- Agent usage limits (shown live on the dashboard) ---
+// Claude reports its 5-hour and weekly usage in every stream; Codex writes the same two
+// windows to its session logs. The PC worker reads them and sends them to the server.
+export interface LimitWindow { usedPercent: number; /** Unix seconds. */ resetsAt: number; minutes?: number }
+export interface AgentLimits { fiveHour?: LimitWindow; week?: LimitWindow; plan?: string; status?: string; updatedAt: string }
+export interface PcLimits { claude?: AgentLimits; codex?: AgentLimits }
+
+function cleanWindow(value: unknown): LimitWindow | undefined {
+  const w = value as Partial<LimitWindow> | null;
+  if (!w || typeof w !== "object" || typeof w.usedPercent !== "number" || typeof w.resetsAt !== "number") return;
+  if (!Number.isFinite(w.usedPercent) || !Number.isFinite(w.resetsAt) || w.usedPercent < 0 || w.usedPercent > 100) return;
+  if (w.resetsAt < 1e9 || w.resetsAt > 4e9) return;
+  const minutes = typeof w.minutes === "number" && Number.isFinite(w.minutes) && w.minutes > 0 && w.minutes <= 20000 ? Math.round(w.minutes) : undefined;
+  return { usedPercent: Math.round(w.usedPercent * 10) / 10, resetsAt: Math.floor(w.resetsAt), ...(minutes ? { minutes } : {}) };
+}
+
+/** Keeps only well-formed limit numbers and short labels. Anything else is dropped, never trusted. */
+export function sanitizeLimits(value: unknown, now = new Date()): PcLimits {
+  const out: PcLimits = {};
+  if (!value || typeof value !== "object") return out;
+  for (const provider of ["claude", "codex"] as const) {
+    const raw = (value as Record<string, unknown>)[provider] as Partial<AgentLimits> | undefined;
+    if (!raw || typeof raw !== "object") continue;
+    const fiveHour = cleanWindow(raw.fiveHour), week = cleanWindow(raw.week);
+    if (!fiveHour && !week) continue;
+    const stamp = typeof raw.updatedAt === "string" ? Date.parse(raw.updatedAt) : NaN;
+    const updatedAt = Number.isFinite(stamp) && stamp <= now.getTime() + 5 * 60_000 ? new Date(stamp).toISOString() : now.toISOString();
+    const plan = typeof raw.plan === "string" && /^[a-z0-9_-]{1,20}$/i.test(raw.plan) ? raw.plan : undefined;
+    const status = typeof raw.status === "string" && /^[a-z0-9_-]{1,30}$/i.test(raw.status) ? raw.status : undefined;
+    out[provider] = { ...(fiveHour ? { fiveHour } : {}), ...(week ? { week } : {}), ...(plan ? { plan } : {}), ...(status ? { status } : {}), updatedAt };
+  }
+  return out;
+}
