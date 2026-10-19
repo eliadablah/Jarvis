@@ -2,6 +2,16 @@
 
 ## 2026-10-19
 
+### Fix - Codex job files, visible failures and explicit retries
+
+- Fixed the observed four-job run failure: Codex's job adapter had Chrome but no structured local file reader. Added required jarvis-job-files tools for approved job text/skill/history files, resume directory listing and actual PDF text extraction. Confirmed submission logging is URL-idempotent, confined to the existing log, and exposed only for submission tasks. No arbitrary shell, file write or path is exposed.
+- Job PDF runtime is private and pinned to pdf-parse 2.4.5. Job file tools use normal MCP approval review and realpath boundaries; they reject traversal and symlink escapes. Other adapters retain existing tools.
+- PC cards now show Why it stopped and the specific missing requirement without opening Details. Failure notifications include that reason. Try again creates a separate, idempotent user-requested run; partial job runs request only the remaining count and preserve original constraints. Completed, active and uncertain-connection tasks do not offer blind retries.
+- Transient no-action startup/connection failures get at most three attempts with delay. Actual access/approval denial, authentication/quota failures and possibly performed actions are not blindly repeated. Existing capable-provider fallback and workspace quota checkpointing remain.
+- Validation: 110 app tests, 36 worker tests, app/worker TypeScript and app build pass. A live Codex job diagnostic successfully read the real application log and actual 3-page master resume PDF without modifying files or submitting applications.
+- Local activation attempt stopped at Windows Win32 process-inspection Access denied. Running worker was not replaced. pc-worker/activate-job-files.ps1 is ready for normal PowerShell activation. The failed four-job task was not automatically replayed.
+
+
 ### Feature - Ruflo project coordination for the local worker
 
 - Installed and pinned Ruflo 3.57.1 in the private local runtime. Workspace Claude and Codex adapters receive nine Ruflo task/memory tools through a server-enforced allowlist. Browser/job/desktop adapters keep their existing tools. Ruflo records coordinate work; the existing scoped agent executes it. Autonomous swarms and API-billed agent execution are not enabled.

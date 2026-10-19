@@ -5,7 +5,7 @@ import { ChatRequestError, readBody, checkRequestSource, isValidSessionId } from
 import { dashboardDir } from "../dashboard.ts";
 import { appHeaders } from "../http/securityHeaders.ts";
 import { PC_PROTOCOL, CAPABILITIES, sanitizeLimits, type ExecutorStatus } from "./protocol.ts";
-import { claimNextPcTask, finishPcTask, heartbeatPcTask, cancelPcTask, pcSnapshot, publicTask, setPcLimits, workerOnline, type PcTask } from "./store.ts";
+import { claimNextPcTask, finishPcTask, heartbeatPcTask, cancelPcTask, retryPcTask, pcSnapshot, publicTask, setPcLimits, workerOnline, type PcTask } from "./store.ts";
 function json(res: ServerResponse, status: number, value?: unknown): void {
   res.writeHead(status, { ...appHeaders(), "Content-Type": "application/json", "Cache-Control": "no-store" });
   res.end(value === undefined ? undefined : JSON.stringify(value));
@@ -28,6 +28,7 @@ function executorsOf(value: unknown): ExecutorStatus[] {
     /^[a-z-]{1,60}$/.test(e.id) && ["ready", "cooldown", "unavailable"].includes(e.state) &&
     typeof e.reason === "string" && e.reason.length <= 300 && e.remainingTokens === null &&
     (e.retryAt === undefined || typeof e.retryAt === "string" && Number.isFinite(Date.parse(e.retryAt))) &&
+    (e.features === undefined || Array.isArray(e.features) && e.features.length <= 1 && e.features.every((f: unknown) => f === "job-files-v1")) &&
     Array.isArray(e.capabilities) && e.capabilities.length <= 4 && e.capabilities.every((c: string) => CAPABILITIES.includes(c as typeof CAPABILITIES[number]))))
     throw new ChatRequestError(400, "Invalid agent capabilities.");
   return value;
@@ -41,7 +42,16 @@ export async function handlePcTasks(req: IncomingMessage, res: ServerResponse, p
         executors: state.executors ?? [], limits: state.limits ?? {}, tasks: state.tasks.slice(-100).reverse().map(publicTask) }); return;
     }
     if (method !== "POST") { json(res, 405, { error: "Method not allowed" }); return; }
-    const match = /^\/api\/pc\/tasks\/([0-9a-f-]{36})\/(result|heartbeat|cancel)$/.exec(path);
+    const match = /^\/api\/pc\/tasks\/([0-9a-f-]{36})\/(result|heartbeat|cancel|retry)$/.exec(path);
+    if (match?.[2] === "retry") {
+      checkRequestSource(req.headers); await bodyOf(req);
+      if (!config.pcWorkerToken) { json(res,409,{error:"PC worker is not enabled."}); return; }
+      try {
+        const task = await retryPcTask(dir,match[1]!);
+        json(res,task?200:404,task?{task:publicTask(task)}:{error:"Task not found."});
+      } catch(e) { json(res,409,{error:e instanceof Error?e.message:"Retry could not be queued."}); }
+      return;
+    }
     if (match?.[2] === "cancel") {
       checkRequestSource(req.headers); await bodyOf(req);
       const task = await cancelPcTask(dir, match[1]!);

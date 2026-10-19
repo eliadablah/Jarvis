@@ -14,6 +14,7 @@ export interface Evidence { action: string; target: string; detail: string }
 export interface PcReport { outcome: Outcome; summary: string; evidence: Evidence[]; needsInput: string[]; submitted: number }
 export interface ExecutorStatus {
   id: string; capabilities: Capability[]; state: "ready" | "cooldown" | "unavailable";
+  features?: ("job-files-v1")[];
   reason: string; retryAt?: string; remainingTokens: null;
 }
 export function capabilityFor(plan: PcPlan): Capability { return plan.kind === "desktop" ? "desktop.launch" : plan.kind === "browser" && plan.action === "execute" ? "browser.execute" : plan.kind; }

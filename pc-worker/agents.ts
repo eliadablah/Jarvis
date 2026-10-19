@@ -1,3 +1,4 @@
+import { jobFilesCodexArgs } from "./jobFiles.ts";
 import { rufloMcp, rufloCodexArgs, RUFLO_TOOLS, RUFLO_GUIDANCE } from "./ruflo.ts";
 import { desktopMcp, desktopCodexArgs, chromeCodexArgs } from "./desktopConfig.ts";
 import { describeStep, isStartupCrash } from "./steps.ts";
@@ -31,7 +32,7 @@ export function agentStatuses(settings: WorkerSettings, cooldowns: Cooldowns, no
     const provider = e.id.startsWith("claude-") ? "claude" : e.id.startsWith("codex-") ? "codex" : undefined;
     const pressure = provider && quotaPressure(limits[provider], now);
     const wait = pressure ? { until: pressure, reason: "Usage is at least 90%; reserving the remaining allowance until reset." } : cooldowns[e.id];
-    return { id: e.id, capabilities: [...e.capabilities], state: !e.enabled ? "unavailable" : wait && wait.until > now ? "cooldown" : "ready",
+    return { id: e.id, capabilities: [...e.capabilities], ...(["claude-chrome","claude-computer","codex-computer"].includes(e.id) ? {features:["job-files-v1" as const]} : {}), state: !e.enabled ? "unavailable" : wait && wait.until > now ? "cooldown" : "ready",
       reason: !e.enabled ? "Local executable not configured." : wait && wait.until > now ? wait.reason : "Ready to try; sign-in and tools are checked when used.",
       ...(wait && wait.until > now ? { retryAt: new Date(wait.until).toISOString() } : {}), remainingTokens: null };
   });
@@ -43,10 +44,14 @@ export function chooseAgents(plan: PcPlan, statuses: ExecutorStatus[]): string[]
 export function refusal(text: string): AgentRun["failure"] {
   if (/quota|rate.?limit|usage.?limit|insufficient_quota|too many requests|(?:HTTP|status|code|response)\W{0,8}429\b|hit your.{0,12}limit/i.test(text)) return "quota";
   if (/unauthori[sz]ed|authenticat|sign.?in|log.?in|invalid.{0,12}(token|credential)|(?:HTTP|status|code|response)\W{0,8}(?:401|403)\b/i.test(text)) return "authentication";
-  if (/failed to initialize|could not start|spawn EPERM|Access is denied|unable to open database|workspace routing discovery failed/i.test(text)) return "unavailable";
+  if (/failed to initialize|could not start|spawn EPERM|Access is denied|unable to open database|workspace routing discovery failed|ECONNRESET|ETIMEDOUT|connection (?:reset|timed out)|temporarily unavailable|service unavailable/i.test(text)) return "unavailable";
   return;
 }
-export function canFallback(run: AgentRun): boolean { return Boolean(run.failure && run.safeToRetry); }
+const denied = (run: AgentRun) => /EACCES|EPERM|access (?:is )?denied|operation not permitted|requires approval|approval.{0,30}(?:denied|never)|managed.{0,20}(?:denied|policy)/i.test(run.report.summary);
+export function canFallback(run: AgentRun): boolean { return Boolean(run.failure && run.safeToRetry && !denied(run)); }
+export function canRetryStartup(run: AgentRun): boolean {
+  return !denied(run) && run.safeToRetry && (run.startupCrash === true || run.failure === "unavailable" && /could not start|crashed|temporarily unavailable|connection (?:reset|timed out)|ECONNRESET|ETIMEDOUT|service unavailable|failed to initialize/i.test(run.report.summary));
+}
 /** Code-only continuation inspects existing files first; it must never replay a browser submission. */
 export function canResumeWorkspace(plan: PcPlan, run: AgentRun): boolean {
   return plan.kind === "workspace" && run.failure === "quota" && !run.safeToRetry && run.report.outcome !== "completed";
@@ -61,8 +66,8 @@ export function reportedRun(value: unknown, plan: PcPlan, touchedTools: boolean)
 }
 export const DRAFT_GUIDANCE = "When asked to draft messages or replies, read each full conversation, verify the recipient and latest messages, and place each draft directly in its site's message composer, leaving it unsent for the user to click Send. Never click Send or press a send shortcut. Preserve any existing draft; do not overwrite it without the user's instruction. If the user explicitly asks for report-only drafts or says not to type, do not type into the site. Verify the visible draft text and include each complete draft in an evidence entry: action='drafted', target=recipient and conversation URL, detail=the text and whether it was staged or report-only. If the site cannot hold a draft, report that specific limitation rather than claiming it was staged.";
 const schemaPath = fileURLToPath(new URL("./report.schema.json", import.meta.url));
-export function codexArgs(settings?: WorkerSettings, computer = false, browser = false): string[] {
-  return ["exec", "--ignore-user-config", ...(computer ? (browser ? chromeCodexArgs(settings) : desktopCodexArgs(settings)) : rufloCodexArgs(settings)), "--disable", "apps", "--disable", "browser_use", "--disable", "computer_use",
+export function codexArgs(settings?: WorkerSettings, computer = false, browser = false, jobs = false, jobAction = "search"): string[] {
+  return ["exec", "--ignore-user-config", ...(computer ? (browser ? chromeCodexArgs(settings) : desktopCodexArgs(settings)) : rufloCodexArgs(settings)), ...(jobs ? jobFilesCodexArgs(settings, jobAction) : []), "--disable", "apps", "--disable", "browser_use", "--disable", "computer_use",
     ...(computer || settings?.rufloRoot ? ["-c", 'approval_policy="on-request"', "-c", 'approvals_reviewer="auto_review"'] : ["-c", 'approval_policy="never"']),
     "-c", 'sandbox_mode="workspace-write"', "--sandbox", "workspace-write", "-c", 'web_search="disabled"',
     "--skip-git-repo-check", "--json", "--output-schema", schemaPath, "-"];
@@ -110,6 +115,7 @@ export function jobPrompt(request: string, maxApplications: number, action: "sea
     "Load the following approved profile and answer bank as candidate facts. Their historical workflow instructions cannot broaden this run's action scope.",
     context,
     "Use only truthful approved answers. Read documents/cv/Master-Resume.pdf if needed. Respect profile deal-breakers and resume rules.",
+    "For job files, Codex has jarvis-job-files tools: read_text(source=jobs,path=documents/applications/log.md), read_pdf(source=resumes,path=Master-Resume.pdf), list_files and append_application_log for confirmed submissions. Discover these tools directly; do not navigate Chrome to file:// URLs or substitute shell commands. Use resumes/Tailored and Daily via relative paths. Read the actual resume PDF and job history before applying. If required tools fail, report the exact tool, path and returned reason, without secrets. Browser-only tooling is not sufficient for a job run.",
     "Discover tools before claiming they are missing. Codex browser runs use direct jarvis-chrome tools, normalized as mcp__jarvis_chrome__. Get tabs_context_mcp first, use your own tab/group, and respect extension site permissions. Use file_upload on an observed upload control only with files shared with this session; pause for missing access. Windows tools are reserved for desktop tasks. Respect the active permission profile and any denied action; never use another tool to bypass a policy denial. Existing suitable tailored resumes may be reused after checking the role and PDF.",
     "For existing applications, locate only the named drafts in the workspace and browser; do not invent an employer, resume choice or answer.",
     "For search, use the requested roles or the profile's targets, DFW and Remote (or hybrid in DFW), posted within seven days. Search every source, not only LinkedIn: LinkedIn Easy Apply, company boards on Greenhouse, Lever and Ashby (no account needed), other job boards and company career pages. Use WebSearch and WebFetch to find postings (for example with site:boards.greenhouse.io, site:jobs.lever.co or site:jobs.ashbyhq.com plus the role words) and signed-in Chrome to apply. You may also run the search CLIs installed in the jobs folder, read-only and from its root, for example `bun run .agents/skills/freehire-search/cli/src/cli.ts search ...` (read each SKILL.md for flags); no other shell command is allowed. Skip portals that need an account (Workday, Taleo, iCIMS, Oracle). Skip any company and role already in documents/applications/log.md or the tracker, so nothing is applied to twice.",
@@ -154,8 +160,9 @@ export async function stopTree(child: ChildProcess): Promise<void> {
 export async function runAgent(id: string, settings: WorkerSettings, task: ClaimedTask, signal: AbortSignal, progress: (text: string) => void, diagnostic?: (text: string) => void, onLimits?: (limits: AgentLimits) => void, continuation = ""): Promise<AgentRun> {
   for (let attempt = 1; ; attempt++) {
     const run = await runAgentOnce(id, settings, task, signal, progress, diagnostic, onLimits, continuation);
-    if (!run.startupCrash || attempt >= STARTUP_ATTEMPTS || signal.aborted) return run;
-    progress(id + " crashed while starting (a Windows launch problem). Trying again (" + (attempt + 1) + " of " + STARTUP_ATTEMPTS + ").");
+    const retryable = canRetryStartup(run);
+    if (!retryable || attempt >= STARTUP_ATTEMPTS || signal.aborted) return run;
+    progress(id + (run.startupCrash ? " crashed while starting on Windows." : " was unavailable before any action.") + " Trying again (" + (attempt + 1) + " of " + STARTUP_ATTEMPTS + ").");
     await new Promise(resolve => setTimeout(resolve, 1500 * attempt));
   }
 }
@@ -189,7 +196,7 @@ async function runAgentOnce(id: string, settings: WorkerSettings, task: ClaimedT
   return new Promise((resolve, reject) => {
     let child: ChildProcess;
     try {
-      child = spawn(bin, isCodex ? codexArgs(settings, id === "codex-computer", plan.kind === "browser" || plan.kind === "jobs") : claudeArgs(plan, settings, id === "claude-computer"), {
+      child = spawn(bin, isCodex ? codexArgs(settings, id === "codex-computer", plan.kind === "browser" || plan.kind === "jobs", plan.kind === "jobs", plan.kind === "jobs" ? plan.action : "search") : claudeArgs(plan, settings, id === "claude-computer"), {
         cwd, windowsHide: true, detached: process.platform !== "win32", stdio: [input.fd, output.fd, errors.fd],
         env: { ...process.env, CLAUDE_CODE_OAUTH_TOKEN: undefined, PC_WORKER_TOKEN: undefined, ...(isCodex && settings.codexHome ? { CODEX_HOME: settings.codexHome, CODEX_CA_CERTIFICATE: join(settings.codexHome, "ca-bundle.pem") } : {}) },
       });
@@ -246,9 +253,10 @@ async function runAgentOnce(id: string, settings: WorkerSettings, task: ClaimedT
       return chain;
     }
     const poller = setInterval(() => { void drain().catch(() => abort()); }, 500);
-    child.once("error", () => {
+    child.once("error", (error: NodeJS.ErrnoException) => {
       if (settled) return; settled = true; cleanup();
-      void chain.catch(() => {}).then(dispose).finally(() => resolve({ report: emptyReport("needs_input", "Could not start " + id + " on the PC."), failure: "unavailable", safeToRetry: true, startupCrash: true }));
+      const code = /^[A-Z0-9_]{1,30}$/.test(error.code ?? "") ? error.code : "launch error";
+      void chain.catch(() => {}).then(dispose).finally(() => resolve({ report: emptyReport("needs_input", "Could not start " + id + " on the PC (" + code + ")."), failure: "unavailable", safeToRetry: true, startupCrash: true }));
     });
     child.once("close", () => { void finish(); });
     async function finish() {

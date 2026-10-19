@@ -12,6 +12,8 @@ export interface PcTask {
   /** The last few distinct live steps the PC reported, newest last (for the dashboard's live view). */
   activity?: { at: string; text: string }[];
   cancelRequested?: boolean; report?: PcReport; reportId?: string; requestId?: string;
+  retryOf?: string; retryTaskId?: string;
+  requiredFeature?: "job-files-v1";
 }
 export const MAX_ACTIVITY = 12;
 export interface PcTaskState { tasks: PcTask[]; workerSeenAt?: string; workerId?: string; executors?: ExecutorStatus[]; limits?: PcLimits; }
@@ -65,13 +67,39 @@ export function enqueuePcTask(dir: string, request: string, requestId?: string, 
     state.tasks.push(task); return task;
   }, now);
 }
+/** A new explicit user retry is a separate run, idempotent for the original task. */
+export function retryPcTask(dir: string, id: string, now = new Date()): Promise<PcTask | undefined> {
+  return mutate(dir, state => {
+    const source = state.tasks.find(t => t.id === id);
+    if (!source) return;
+    const existing = state.tasks.find(t => t.retryOf === id);
+    if (existing) return existing;
+    if (!source.plan || !["needs_input", "failed", "partial", "cancelled"].includes(source.status)) throw new Error("This task cannot be retried yet. Review any uncertain result first.");
+    if (state.tasks.filter(active).length >= 100) throw new Error("PC queue is full.");
+    let request = source.request;
+    if (source.plan.kind === "jobs" && source.plan.action === "submit") {
+      const remaining = source.plan.maxApplications - (source.report?.submitted ?? 0);
+      if (remaining <= 0) throw new Error("All requested applications were already submitted.");
+      request = "Apply to " + remaining + " job applications. Original task constraints: " + source.request;
+    }
+    request += "\nUser requested a retry. First check current files, application history and confirmation pages. Skip completed actions and duplicate applications; finish only remaining authorized work.";
+    if (request.length > MAX_REQUEST_CHARS) throw new Error("Retry request is too long. Send a shorter command preserving its original limits.");
+    const intent = parsePcIntent(request);
+    if (intent?.type !== "task") throw new Error("Retry needs an explicit scoped task.");
+    const task: PcTask = {id:randomUUID(),kind:intent.plan.kind,plan:intent.plan,request,status:"queued",createdAt:now.toISOString(),retryOf:id,
+      displayRequest:"Try again: " + (source.displayRequest ?? source.request).slice(0,1800), ...(intent.plan.kind === "jobs" ? { requiredFeature: "job-files-v1" as const } : {})};
+    source.retryTaskId = task.id;
+    state.tasks.push(task); return task;
+  },now);
+}
 export function claimNextPcTask(dir: string, workerId: string, executors: ExecutorStatus[], now = new Date()): Promise<PcTask | undefined> {
   return mutate(dir, state => {
     state.workerSeenAt = now.toISOString(); state.workerId = workerId; state.executors = executors;
     if (state.tasks.some(t => ["running", "cancelling"].includes(t.status))) return;
     const task = state.tasks.find(t => t.status === "queued"); if (!task) return;
     if (!task.plan) { task.status = "needs_input"; task.result = "Older task needs an explicit search, prepare, or submit request."; return; }
-    const candidates = executors.filter(e => e.capabilities.includes(capabilityFor(task.plan!)));
+    const candidates = executors.filter(e => e.capabilities.includes(capabilityFor(task.plan!)) && (!task.requiredFeature || e.features?.includes(task.requiredFeature)));
+    if (task.requiredFeature && !candidates.length) { task.progress = "Waiting for the updated worker with job-file tools. Restart the idle PC worker to activate the fix."; return; }
     if (!candidates.some(e => e.state === "ready")) {
       task.progress = candidates.some(e => e.state === "cooldown") ? "Waiting for a capable agent's usage limit to reset." : "No ready agent has the required tools. Check PC agents.";
       if (!candidates.length && ["computer", "browser.execute"].includes(capabilityFor(task.plan))) { task.progress = "Waiting for the updated PC worker to connect its action tools. Restart the idle worker to activate them."; }
