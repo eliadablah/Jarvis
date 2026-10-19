@@ -2,6 +2,12 @@
 
 ## 2026-10-19
 
+### Feature - Live Claude and Codex usage limits, and search CLIs for job runs
+
+- **Usage limits on the dashboard:** the PC worker reads Claude's 5-hour and weekly usage from the `rate_limit_event` in every Claude run (plus a one-word probe when idle for 30 minutes) and Codex's from its session logs, and sends them with each claim and heartbeat. The server validates and stores the later reading per provider, and the PC activity card and side panel show bars with reset times, with an honest "as of" age when the reading is old. Old workers that send no limits keep working.
+- **Job runs can search:** job runs may run the installed search CLIs (`freehire-search`, `jobbank-search`, `linkedin-search`, `search` command only) through narrow shell patterns; any other shell command stays denied. The prompt tells the agent to use them alongside web search, since the 20-application run on 2026-10-19 found nothing without them.
+- Tests: 104 app tests and 28 worker tests passing, and the type check is clean.
+
 ### Feature - Scheduled morning job run, jobs keep going past blocked ones, drafts saved
 
 - **Scheduled task inside Jarvis:** every morning at 7:00 AM Dallas time the server queues "Apply to 10 job applications" for the PC worker (`MORNING_RUN_TIME`, `MORNING_RUN_COUNT`, `MORNING_RUN_TZ`). Once per day, only within three hours of the scheduled time, a run left waiting 12 hours is cancelled, and it can be paused from the "On your radar" card, which now shows the next run and the last result (`GET /api/schedules`).

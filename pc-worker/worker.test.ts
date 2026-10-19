@@ -118,6 +118,10 @@ test("capabilities and cooldowns control routing; no fallback after tools", () =
   assert.ok(statuses.every(s => s.remainingTokens === null));
   assert.ok(!codexArgs().includes("--dangerously-bypass-approvals-and-sandbox"));
   assert.ok(claudeArgs(plan("Find jobs")).includes("--restricted"));
+  // Job runs may run only the installed search CLIs in a shell; plain Bash stays off the deny list only because the allow list is narrow.
+  const jobArgs = claudeArgs(plan("Find jobs")), allowed = jobArgs.slice(jobArgs.indexOf("--allowedTools"), jobArgs.indexOf("--disallowedTools"));
+  assert.ok(allowed.some(t => t.startsWith("Bash(bun run .agents/skills/freehire-search/cli/src/cli.ts search")));
+  assert.ok(!allowed.includes("Bash"));
   assert.match(jobPrompt("Find jobs", 10, "search"), /Maximum submissions: 0/);
 });
 test("durable outbox survives reload and failed delivery without rerunning a task", async () => withDir(async dir => {

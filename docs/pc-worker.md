@@ -141,6 +141,14 @@ For local development, `npm run test:local` runs the app tests without a subproc
 - **The count you ask for is the count it aims for.** The old local cap (`maxApplications` in `pc-worker.json`) silently turned "apply to 20" into 10 and is no longer used. The protocol still limits one task to 25.
 - **Drafts are in the report.** When asked to draft messages or replies, the agent never sends or types them; each draft goes into its own evidence entry (`drafted`, who it is for, the full text), visible under Details. The agent's chat reply never reaches Jarvis, so a draft left only there was lost.
 
+## Usage limits
+
+The worker reports Claude's and Codex's 5-hour and weekly usage so the dashboard can show them live. Claude's numbers come from the `rate_limit_event` in each `claude -p` stream (and a tiny haiku probe after 30 idle minutes); Codex's come from the newest `rollout-*.jsonl` under `~/.jarvis/codex/sessions` and `~/.codex/sessions`. They travel as `limits` in the claim and heartbeat bodies, the server keeps the later reading per provider, and a window past its reset time shows as reset. Bad readings are ignored, so the worker never fails a task over them.
+
+## Search CLIs in job runs
+
+Job runs may run only `bun run .agents/skills/<freehire|jobbank|linkedin>-search/cli/src/cli.ts search ...` in a shell, from the jobs folder. Every other shell command is denied.
+
 ## Scheduled morning run
 
 Jarvis queues one PC task every morning: "Apply to 10 job applications. Scheduled morning run." (`app/src/schedules/morning.ts`). It is a normal task, so the live view, reports, cancel and all safety rules apply, and the worker also finishes any applications already prepared in that day's report first (they count toward the 10).
