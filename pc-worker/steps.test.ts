@@ -68,3 +68,20 @@ test("the server keeps a short feed of distinct live steps for the dashboard", a
     assert.equal(view.lease, undefined);
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
+
+test("job prompts keep going past blocked jobs, use every source, and put drafts in the report", async () => {
+  const { jobPrompt, promptFor } = await import("./agents.ts");
+  const prompt = jobPrompt("Apply to 20 job applications.", 20, "submit");
+  assert.match(prompt, /Maximum submissions: 20/);
+  assert.match(prompt, /one blocked application never ends the run/);
+  assert.match(prompt, /abandon only that one without submitting it/);
+  assert.match(prompt, /continue with the next suitable job/);
+  assert.match(prompt, /Search every source, not only LinkedIn/);
+  assert.match(prompt, /Greenhouse, Lever and Ashby/);
+  assert.match(prompt, /action='drafted'/);
+  assert.match(prompt, /visible interactive CAPTCHA challenge/);
+  assert.equal(/daily scheduled morning run/.test(prompt), false);
+  assert.match(jobPrompt("Apply to 10 job applications. Scheduled morning run.", 10, "submit"), /daily scheduled morning run[^]*never exceed the maximum/i);
+  const browser = promptFor({ id: "x", request: "In my Chrome, execute this task: draft replies", plan: { kind: "browser", action: "execute" }, workerId: "w", lease: "l" }, "");
+  assert.match(browser, /action='drafted'/);
+});

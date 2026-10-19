@@ -2,6 +2,14 @@
 
 ## 2026-10-19
 
+### Feature - Scheduled morning job run, jobs keep going past blocked ones, drafts saved
+
+- **Scheduled task inside Jarvis:** every morning at 7:00 AM Dallas time the server queues "Apply to 10 job applications" for the PC worker (`MORNING_RUN_TIME`, `MORNING_RUN_COUNT`, `MORNING_RUN_TZ`). Once per day, only within three hours of the scheduled time, a run left waiting 12 hours is cancelled, and it can be paused from the "On your radar" card, which now shows the next run and the last result (`GET /api/schedules`).
+- **Keep going:** a job that needs an answer Jarvis can't give truthfully (or a login, CAPTCHA, account or attestation) is skipped and listed under "Needs you", and the run moves on to the next suitable job. Jobs are searched across LinkedIn, Greenhouse, Lever, Ashby, other boards and career pages, not only LinkedIn.
+- **No silent cap:** the worker used to cut any request to the local `maxApplications` (10). It now aims for the number requested (up to 25); the daily 10 belongs to the schedule.
+- **Drafts reach you:** when asked to draft messages or replies, the agent puts each draft's full text in the report (Details), because its chat reply never reaches Jarvis. Earlier LinkedIn drafts were written but lost this way.
+- Tests: 101 app tests and 25 worker tests passing (schedule time math including the November daylight-saving change, once-a-day queuing, pause, stale cancel, new prompts).
+
 ### Feature - Live "PC is working" view, and retry on Windows startup crashes
 
 - The PC activity card now shows a running task as working: a pulsing indicator, the current step in plain words, a running timer, "last signal Ns ago", and the last few steps. It polls every 3 seconds while a task runs and turns amber if the PC is silent for a minute.

@@ -2,7 +2,8 @@
 .reply-close { display: none; }
 .model-status { margin: 12px 0; padding: 12px 0; border-bottom: 1px solid var(--line); }
 .model-status strong { display: block; margin: 7px 0; }
-.model-status p { margin: 5px 0; }
+.model-status p { margin: 5px 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.schedule-toggle { margin-top: 4px; font-size: 12px; }
 /* Live PC view (pcActivity.js): shows the PC working, with a timer and the latest steps. */
 .pc-live { margin: 8px 0 4px; padding: 12px 14px; border-radius: 12px; background: color-mix(in srgb, var(--mint, #b8eccb) 7%, transparent); border: 1px solid color-mix(in srgb, var(--mint, #b8eccb) 24%, transparent); }
 .pc-live.quiet { border-color: color-mix(in srgb, var(--gold, #dec998) 45%, transparent); background: color-mix(in srgb, var(--gold, #dec998) 7%, transparent); }

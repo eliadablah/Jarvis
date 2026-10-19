@@ -133,3 +133,20 @@ A running task shows that it is working, not just a status word. The PC activity
 On this PC, code injected into new processes sometimes crashes them at startup (access violation `0xC0000005` and similar). If an agent dies to one of those crash codes before it has run any tool or produced any result, nothing can have happened yet, so the worker starts it again, up to three attempts, and shows "crashed while starting, trying again" in the live view. A crash after a tool has run is never retried.
 
 For local development, `npm run test:local` runs the app tests without a subprocess per test file, which avoids most random launch failures. CI uses the normal `npm test`.
+
+## Job runs: keep going, every source, requested count
+
+- **One blocked job never ends a run.** If a job needs a login, a visible CAPTCHA, an account, a legal attestation, or a question with no truthful approved answer, the agent abandons only that application, lists it under "Needs you" (company, role, link, the exact question) and moves on to the next suitable job until the requested number is submitted or none remain. A run with skips ends "Partly completed".
+- **Every source, not only LinkedIn:** LinkedIn Easy Apply, company boards on Greenhouse, Lever and Ashby (no account needed), other boards and career pages. Postings are found with WebSearch/WebFetch (for example `site:boards.greenhouse.io`) and applied to in the signed-in Chrome. Portals that need an account (Workday, Taleo, iCIMS, Oracle) are skipped, and so is any company and role already in the log or tracker.
+- **The count you ask for is the count it aims for.** The old local cap (`maxApplications` in `pc-worker.json`) silently turned "apply to 20" into 10 and is no longer used. The protocol still limits one task to 25.
+- **Drafts are in the report.** When asked to draft messages or replies, the agent never sends or types them; each draft goes into its own evidence entry (`drafted`, who it is for, the full text), visible under Details. The agent's chat reply never reaches Jarvis, so a draft left only there was lost.
+
+## Scheduled morning run
+
+Jarvis queues one PC task every morning: "Apply to 10 job applications. Scheduled morning run." (`app/src/schedules/morning.ts`). It is a normal task, so the live view, reports, cancel and all safety rules apply, and the worker also finishes any applications already prepared in that day's report first (they count toward the 10).
+
+- **When and how many:** `MORNING_RUN_TIME` (default `07:00`), `MORNING_RUN_COUNT` (default `10`, at most 25) and `MORNING_RUN_TZ` (default `America/Chicago`), set in `deploy/compose.yaml`. The PC worker token must be configured.
+- **Once a day:** the request ID carries the date, so a restart can never queue it twice. It only queues in the three hours after the scheduled time, so deploying in the afternoon starts nothing.
+- **PC off:** the task waits; if it is still waiting 12 hours later it is cancelled instead of running late.
+- **Pause / Resume** on the dashboard's "On your radar" card (saved on the server), which also shows the next run and the last result.
+- **My 6 AM Claude routine** (prepare-only) can keep running before it; the 7:00 AM Jarvis run submits.

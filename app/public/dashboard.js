@@ -1,5 +1,6 @@
 import { mountPcActivity } from './pcActivity.js';
 import { startJobsPanel } from './jobsPanel.js';
+import { startSchedulePanel } from './schedulePanel.js';
 import { mountPcOffer, splitPcOffer } from './pcOffer.js';
 import { scheduledDesign, parseViewCommand } from './viewSchedule.js';
 import { HoldToTalk, speechInSupported } from './speechIn.js';
@@ -150,3 +151,4 @@ $('#day-label').textContent=new Date().toLocaleDateString(undefined,{weekday:'lo
 
 const pcActivity=mountPcActivity({api,safe,modal,toast,navigate});
 startJobsPanel();
+startSchedulePanel();

@@ -31,6 +31,8 @@ export interface AppConfig {
   pcWorkerToken: string;
   /** Read-only Google Sheets job tracker. Off until both the sheet ID and the service account key are set. */
   jobTracker: { sheetId: string; range: string; serviceAccountB64: string };
+  /** The daily morning job run queued by the server (see schedules/morning.ts). */
+  morningRun: { time: string; count: number; timezone: string };
 }
 
 export interface CodexConfig { enabled: boolean; bin: string; model: string; connectorsEnabled?: boolean; }
@@ -75,6 +77,12 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
       shareVault: source.GEMINI_SHARE_VAULT === "true",
     },
     pcWorkerToken: source.PC_WORKER_TOKEN?.trim() || "",
+    morningRun: {
+      time: /^([01]?\d|2[0-3]):[0-5]\d$/.test(source.MORNING_RUN_TIME?.trim() ?? "") ? source.MORNING_RUN_TIME!.trim() : "07:00",
+      // 25 is the most one PC task may submit.
+      count: Math.min(25, parsePositiveInt(source.MORNING_RUN_COUNT, 10)),
+      timezone: source.MORNING_RUN_TZ?.trim() || "America/Chicago",
+    },
     jobTracker: {
       sheetId: source.JOB_TRACKER_SHEET_ID?.trim() || "",
       // No tab name means "the first tab", so renaming the tab can't break it.

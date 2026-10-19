@@ -15,6 +15,8 @@ import { appHeaders } from "./http/securityHeaders.ts";
 import { handleDashboard } from './dashboard.ts';
 import { handlePcTasks } from "./pcTasks/api.ts";
 import { handleJobs } from "./jobs/api.ts";
+import { handleSchedules } from "./schedules/api.ts";
+import { startScheduler } from "./schedules/morning.ts";
 
 const config = loadConfig();
 
@@ -24,6 +26,12 @@ const server = createServer((req, res) => {
 
   if (path.startsWith('/api/dashboard')) {
     handleDashboard(req, res, path, config).catch(() => { if (!res.headersSent) res.writeHead(500); res.end(); });
+    return;
+  }
+
+  // --- Scheduled runs (the morning job run) ---
+  if (path.startsWith("/api/schedules")) {
+    handleSchedules(req, res, path, config).catch(() => { if (!res.headersSent) res.writeHead(500); res.end(); });
     return;
   }
 
@@ -67,6 +75,8 @@ const server = createServer((req, res) => {
 
 server.listen(config.port, () => {
   console.log(`jarvis-web listening on :${config.port} (env=${config.env}, version=${config.version})`);
+  // Queues the daily morning job run when it is due (needs the PC worker token).
+  startScheduler(config);
 });
 
 // --- Graceful shutdown: finish in-flight requests, then exit ---
