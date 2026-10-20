@@ -1,8 +1,8 @@
-// Read-only view of my Google Sheets job tracker.
+// Google tracker reader plus an explicitly approved five-field receipt writer.
 //
 // The server signs in as a Google service account (a robot user) that I
-// shared the sheet with as Viewer, so it can read that one sheet and nothing
-// else. No new dependencies: the sign-in JWT is signed with node:crypto and
+// shared this one sheet with as Editor. Read and write tokens are separate.
+// No new dependencies: the sign-in JWT is signed with node:crypto and
 // the Sheets REST API is called with fetch. Results are cached briefly, and a
 // slightly stale copy is served if Google is briefly unreachable.
 //
@@ -11,6 +11,8 @@
 // Notes. CV Used and Notes are never sent to the browser.
 
 import { createSign } from "node:crypto";
+import { writeTrackerReceipt } from "./trackerWrite.ts";
+import type { Submission } from "./submissions.ts";
 
 export interface TrackerConfig { sheetId: string; range: string; serviceAccountB64: string; }
 
@@ -109,9 +111,9 @@ export function readServiceAccount(b64: string): ServiceAccount {
 
 const b64url = (value: string | Buffer) => Buffer.from(value).toString("base64url");
 
-export function signJwt(account: ServiceAccount, nowSeconds: number): string {
+export function signJwt(account: ServiceAccount, nowSeconds: number, write = false): string {
   const unsigned = b64url(JSON.stringify({ alg: "RS256", typ: "JWT" })) + "." + b64url(JSON.stringify({
-    iss: account.client_email, scope: SCOPE, aud: TOKEN_URL, iat: nowSeconds, exp: nowSeconds + 3600,
+    iss: account.client_email, scope: write ? "https://www.googleapis.com/auth/spreadsheets" : SCOPE, aud: TOKEN_URL, iat: nowSeconds, exp: nowSeconds + 3600,
   }));
   const signature = createSign("RSA-SHA256").update(unsigned).sign(account.private_key);
   return unsigned + "." + b64url(signature);
@@ -121,6 +123,7 @@ type Fetch = typeof fetch;
 
 export class TrackerReader {
   private token?: { value: string; until: number };
+  private writeToken?: { value: string; until: number };
   private cache?: { at: number; snapshot: TrackerSnapshot };
   private inFlight?: Promise<TrackerSnapshot>;
   private retryAfter = 0;
@@ -138,9 +141,10 @@ export class TrackerReader {
   get enabled(): boolean { return Boolean(this.config.sheetId && this.config.serviceAccountB64); }
   get cachedSnapshot(): TrackerSnapshot | undefined { return this.cache && this.now()-this.cache.at<STALE_MS ? {...this.cache.snapshot,...(this.now()-this.cache.at>CACHE_MS?{stale:true}: {})} : undefined; }
 
-  private async accessToken(): Promise<string> {
-    if (this.token && this.token.until > this.now()) return this.token.value;
-    const assertion = signJwt(readServiceAccount(this.config.serviceAccountB64), Math.floor(this.now() / 1000));
+  private async accessToken(write = false): Promise<string> {
+    const cached = write ? this.writeToken : this.token;
+    if (cached && cached.until > this.now()) return cached.value;
+    const assertion = signJwt(readServiceAccount(this.config.serviceAccountB64), Math.floor(this.now() / 1000), write);
     const res = await this.doFetch(TOKEN_URL, {
       method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion }),
@@ -149,14 +153,32 @@ export class TrackerReader {
     if (!res.ok) throw new Error("Google sign-in failed (HTTP " + res.status + ").");
     const body = await res.json() as { access_token?: string; expires_in?: number };
     if (!body.access_token) throw new Error("Google sign-in returned no token.");
-    this.token = { value: body.access_token, until: this.now() + (body.expires_in ?? 3600) * 1000 - 60_000 };
+    const token = { value: body.access_token, until: this.now() + (body.expires_in ?? 3600) * 1000 - 60_000 };
+    if (write) this.writeToken = token; else this.token = token;
     return body.access_token;
+  }
+
+  async record(receipt: Submission): Promise<void> {
+    await writeTrackerReceipt(this.config.range, receipt, async (suffix, body) => {
+      const response = await this.doFetch("https://sheets.googleapis.com/v4/spreadsheets/" + encodeURIComponent(this.config.sheetId) + suffix, {
+        method: body ? "POST" : "GET", headers: { Authorization: "Bearer " + await this.accessToken(Boolean(body)), "Content-Type": "application/json" },
+        ...(body ? { body: JSON.stringify(body) } : {}), signal: AbortSignal.timeout(15_000), redirect: "error",
+      });
+      if (response.status === 401) { this.token = undefined; this.writeToken = undefined; }
+      if (!response.ok) throw Error("Google tracker sync returned HTTP " + response.status + (response.status === 403 ? ". Check this sheet's Editor access for Jarvis." : "."));
+      return response.json();
+    });
+    // Let an older in-flight read finish before invalidating it.
+    await this.inFlight?.catch(() => {});
+    this.cache = undefined;
+    this.retryAfter = 0;
   }
 
   private async fetchSnapshot(): Promise<TrackerSnapshot> {
     const url = "https://sheets.googleapis.com/v4/spreadsheets/" + encodeURIComponent(this.config.sheetId) +
       "/values/" + encodeURIComponent(this.config.range) + "?majorDimension=ROWS";
     const res = await this.doFetch(url, { headers: { Authorization: "Bearer " + await this.accessToken() }, signal: AbortSignal.timeout(15_000) });
+    if (res.status === 401) this.token = undefined;
     if (res.status === 403 || res.status === 404) throw new Error("The tracker isn't shared with the Jarvis service account.");
     if (!res.ok) throw new Error("Google Sheets returned HTTP " + res.status + ".");
     const body = await res.json() as { values?: unknown[][] };

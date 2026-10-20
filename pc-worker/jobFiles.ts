@@ -2,7 +2,7 @@ import { join } from "node:path";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 import type { WorkerSettings } from "./agents.ts";
-export const JOB_FILE_TOOLS = ["read_text", "read_pdf", "list_files", "append_application_log"];
+export const JOB_FILE_TOOLS = ["read_text", "read_pdf", "list_files", "append_application_log", "shared_job_state"];
 export function jobFilesMcp(settings?: WorkerSettings, action = "search", taskId = "") {
   if (!settings?.jobsDir) return undefined;
   return { command: process.execPath, args: [fileURLToPath(new URL("./job-files-server.ts", import.meta.url))], env: {

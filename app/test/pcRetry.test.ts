@@ -16,7 +16,9 @@ test("explicit retries are idempotent and submit only the remaining count",async
  try{
   const task=await enqueuePcTask(dir,"Apply to 4 job applications. Remote support only.");
   await assert.rejects(retryPcTask(dir,task.id));
-  const worker=randomUUID();const claim=await claimNextPcTask(dir,worker,[{id:"codex-computer",state:"ready",reason:"ready",remainingTokens:null,capabilities:["jobs"]}]);
+  const worker=randomUUID();
+  assert.equal(await claimNextPcTask(dir,worker,[{id:"codex-computer",state:"ready",reason:"ready",remainingTokens:null,capabilities:["jobs"]}]),undefined,"new submissions wait for receipt-capable workers");
+  const claim=await claimNextPcTask(dir,worker,[{id:"codex-computer",state:"ready",reason:"ready",remainingTokens:null,capabilities:["jobs"],features:["job-files-v1","task-sync-v1"]}]);
   await finishPcTask(dir,task.id,worker,claim!.lease!,randomUUID(),{outcome:"partial",summary:"One done, three remain",submitted:1,needsInput:[],evidence:[{action:"submitted",target:"https://example.com/job/1",detail:"Confirmation seen"}]});
   const [a,b]=await Promise.all([retryPcTask(dir,task.id),retryPcTask(dir,task.id)]);
   assert.equal(a!.id,b!.id);assert.deepEqual(a!.plan,{kind:"jobs",action:"submit",maxApplications:3});

@@ -22,6 +22,14 @@ test("Codex jobs receive scoped file tools; ordinary browser and workspace tasks
  assert.doesNotMatch(codexArgs(s,true,true).join(" "),/jarvis-job-files/);
  assert.doesNotMatch(codexArgs(s).join(" "),/jarvis-job-files/);
  assert.match(jobPrompt("Apply to 4 jobs",4,"submit"),/jarvis-job-files/);
+ assert.match(codexArgs(s,true,true,true).join(" "),/shared_job_state/);
+});
+test("shared history requires job context and validates pagination",async()=>{
+ const roots={jobs:"unused",resumes:"unused"};
+ await assert.rejects(jobFileCall(roots,"shared_job_state",{}),/active Jarvis job task/);
+ const configured={...roots,sharedState:async(offset:number)=>({offset})};
+ assert.deepEqual(await jobFileCall(configured,"shared_job_state",{offset:100}),{offset:100});
+ await assert.rejects(jobFileCall(configured,"shared_job_state",{offset:-1}),/Invalid tracker page/);
 });
 test("job file server confines paths and logs each confirmation URL once",async()=>{
  const root=await mkdtemp(join(tmpdir(),"jarvis-job-files-"));

@@ -10,10 +10,39 @@ import { publishUpdate } from "../live.ts";
 import { trackerChangeCheck } from "./watch.ts";
 
 const readers = new WeakMap<AppConfig, TrackerReader>();
+const syncs = new WeakMap<AppConfig, Promise<void>>();
 function readerFor(config: AppConfig): TrackerReader {
   let reader = readers.get(config);
   if (!reader) { reader = new TrackerReader(config.jobTracker); readers.set(config, reader); }
   return reader;
+}
+
+export async function syncPendingReceipts(dir: string, writer: Pick<TrackerReader, "record">): Promise<void> {
+  for (const row of (await readSubmissions(dir)).filter(r => r.sync !== "synced" && (r.retryAt ?? 0) <= Date.now()).slice(0, 10)) {
+    try { await writer.record(row); await markSynced(dir, row.id); }
+    catch (error) { await markSynced(dir, row.id, error instanceof Error ? error.message : "Google sync failed; retrying automatically."); }
+  }
+}
+export function syncTracker(config: AppConfig): Promise<void> {
+  const existing = syncs.get(config); if (existing) return existing;
+  const reader = readerFor(config);
+  if (!reader.enabled) return Promise.resolve();
+  const pending = syncPendingReceipts(dashboardDir(config), reader).catch(() => { console.error("Tracker receipt synchronization failed; retained for retry."); }).finally(() => { syncs.delete(config); });
+  syncs.set(config, pending);
+  return pending;
+}
+
+export function sharedTrackerView(snapshot: TrackerSnapshot, offset = 0) {
+  return { source: "Google job tracker; history prevents duplicates and is not progress for this request.", summary: snapshot.summary, updatedAt: snapshot.updatedAt,
+    jobs: snapshot.jobs.slice(offset, offset + 100).map(({ company, role, stage, url }) => ({ company, role, stage, url })),
+    nextOffset: offset + 100 < snapshot.jobs.length ? offset + 100 : null };
+}
+export async function sharedTrackerState(config: AppConfig, offset: number) {
+  const reader = readerFor(config);
+  if (!reader.enabled) throw Error("Google tracker is not configured.");
+  const snapshot = await reader.snapshot();
+  if (snapshot.stale) throw Error("Google tracker is unavailable; history is stale. Retry after the connection recovers.");
+  return sharedTrackerView(snapshot, offset);
 }
 
 export function startTrackerUpdates(config: AppConfig): () => void {
@@ -21,7 +50,8 @@ export function startTrackerUpdates(config: AppConfig): () => void {
   if (!reader.enabled) return () => {};
   const check = trackerChangeCheck(() => reader.snapshot(), () => publishUpdate("jobs"));
   void check();
-  const timer = setInterval(() => { void check(); }, 3_000);
+  void syncTracker(config);
+  const timer = setInterval(() => { void check(); void syncTracker(config); }, 3_000);
   timer.unref();
   return () => clearInterval(timer);
 }
@@ -35,7 +65,7 @@ export function trackerView(snapshot: TrackerSnapshot | undefined, pending: Subm
   return {
     ...(snapshot ? { ...snapshot, jobs: snapshot.jobs.slice(0, 60) } : { trackerUnavailable: true }),
     pendingGoogleSync: pending.length,
-    pendingApplications: pending.map(({ company, role, url }) => ({ company, role, url })),
+    pendingApplications: pending.map(({ company, role, url, error }) => ({ company, role, url, error })),
     syncMessage: pending.length ? "Applications recorded in Jarvis but not yet confirmed in Google. They are not included in the tracker counts." : "",
   };
 }

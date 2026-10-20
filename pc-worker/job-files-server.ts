@@ -4,7 +4,7 @@ import { createInterface } from "node:readline";
 import { pathToFileURL } from "node:url";
 import {homedir} from "node:os";
 import {queueReceipt,flushReceipts,type ReceiptInput} from "./submissionOutbox.ts";
-export interface JobRoots { jobs: string; resumes: string; pdfRuntime?: string; allowLogWrite?: boolean; publishReceipt?:(value:ReceiptInput)=>Promise<void> }
+export interface JobRoots { jobs: string; resumes: string; pdfRuntime?: string; allowLogWrite?: boolean; publishReceipt?:(value:ReceiptInput)=>Promise<void>; sharedState?:(offset:number)=>Promise<unknown> }
 export async function scopedJobPath(roots: JobRoots, source: unknown, path: unknown): Promise<string> {
   if ((source !== "jobs" && source !== "resumes") || typeof path !== "string" || path.length > 500 || isAbsolute(path) || path.includes(":")) throw new Error("Use a relative path inside jobs or resumes.");
   const parts = path.replace(/\\/g,"/").split("/");
@@ -17,6 +17,12 @@ export async function scopedJobPath(roots: JobRoots, source: unknown, path: unkn
   return target;
 }
 export async function jobFileCall(roots: JobRoots, name: string, args: Record<string, unknown>): Promise<unknown> {
+  if(name === "shared_job_state") {
+    if (!roots.sharedState) throw Error("Shared job tracker requires an active Jarvis job task.");
+    const offset=args.offset??0;
+    if(typeof offset!=="number"||!Number.isInteger(offset)||offset<0||offset>10000)throw Error("Invalid tracker page.");
+    return roots.sharedState(offset);
+  }
   if (name === "append_application_log") {
     if (!roots.allowLogWrite) throw new Error("Application logging is enabled only for an authorized submission task.");
     const {company,role,url,confirmation} = args;
@@ -48,6 +54,7 @@ export async function jobFileCall(roots: JobRoots, name: string, args: Record<st
 }
 const fileSchema={type:"object",properties:{source:{type:"string",enum:["jobs","resumes"]},path:{type:"string"},offset:{type:"integer",minimum:0}},required:["source","path"],additionalProperties:false};
 export const JOB_TOOLS=[
+ {name:"shared_job_state",description:"Read live Google job history: company, role, stage, posting URL and aggregate counts only. Follow nextOffset for more records. Historical rows prevent duplicates; they do not fulfill a new task.",inputSchema:{type:"object",properties:{offset:{type:"integer",minimum:0,maximum:10000}},additionalProperties:false}},
  {name:"read_text",description:"Read approved job instructions, application history, tracker, resume HTML or skill files. Returns bounded text with pagination.",inputSchema:fileSchema},
  {name:"read_pdf",description:"Extract actual text from an approved resume PDF.",inputSchema:fileSchema},
  {name:"list_files",description:"List the approved job documents or resume folder. Use source=resumes,path=. for resume files.",inputSchema:fileSchema},
@@ -55,7 +62,15 @@ export const JOB_TOOLS=[
 ];
 if(import.meta.main){
  const roots={jobs:process.env.JARVIS_JOBS_ROOT!,resumes:process.env.JARVIS_RESUMES_ROOT!,pdfRuntime:process.env.JARVIS_PDF_RUNTIME,allowLogWrite:process.env.JARVIS_JOB_ACTION==="submit"};
- const configured:JobRoots={...roots,publishReceipt:async value=>{
+ const configured:JobRoots={...roots,sharedState:async offset=>{
+   const dir=join(homedir(),".jarvis"),taskId=process.env.JARVIS_TASK_ID??"";
+   const settings=JSON.parse((await readFile(join(dir,"pc-worker.json"),"utf8")).replace(/^\uFEFF/,""));
+   const state=JSON.parse(await readFile(join(dir,"pc-worker-state.json"),"utf8"));
+   if(!taskId||state.active?.id!==taskId)throw Error("No matching active job task.");
+   const response=await fetch(new URL("/api/pc/tasks/"+taskId+"/job-state",settings.server),{method:"POST",headers:{Authorization:"Bearer "+settings.token,"Content-Type":"application/json"},body:JSON.stringify({protocol:2,workerId:state.active.workerId,lease:state.active.lease,offset}),redirect:"error",signal:AbortSignal.timeout(20000)});
+   if(!response.ok)throw Error("Shared Google tracker returned HTTP "+response.status+"; check Jarvis connection and task status.");
+   return response.json();
+ },publishReceipt:async value=>{
    const dir=join(homedir(),".jarvis"), taskId=process.env.JARVIS_TASK_ID??"";
    await queueReceipt(dir,taskId,value);
    // Credentials are consumed only inside this deterministic adapter, never returned to the model.

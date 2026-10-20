@@ -8,6 +8,7 @@ import { PC_PROTOCOL, CAPABILITIES, sanitizeLimits, type ExecutorStatus } from "
 import { claimNextPcTask, finishPcTask, heartbeatPcTask, cancelPcTask, retryPcTask, pcSnapshot, publicTask, setPcLimits, workerOnline, type PcTask } from "./store.ts";
 import {recordSubmission,readSubmissions} from "../jobs/submissions.ts";
 import {publishUpdate} from "../live.ts";
+import {syncTracker,sharedTrackerState} from "../jobs/api.ts";
 function json(res: ServerResponse, status: number, value?: unknown): void {
   res.writeHead(status, { ...appHeaders(), "Content-Type": "application/json", "Cache-Control": "no-store" });
   res.end(value === undefined ? undefined : JSON.stringify(value));
@@ -45,7 +46,7 @@ export async function handlePcTasks(req: IncomingMessage, res: ServerResponse, p
         executors: state.executors ?? [], limits: state.limits ?? {}, tasks: state.tasks.slice(-100).reverse().map(task=>({...publicTask(task),confirmedThisTask:receipts.filter(r=>r.taskId===task.id).length})) }); return;
     }
     if (method !== "POST") { json(res, 405, { error: "Method not allowed" }); return; }
-    const match = /^\/api\/pc\/tasks\/([0-9a-f-]{36})\/(result|heartbeat|cancel|retry|submission)$/.exec(path);
+    const match = /^\/api\/pc\/tasks\/([0-9a-f-]{36})\/(result|heartbeat|cancel|retry|submission|job-state)$/.exec(path);
     if (match?.[2] === "retry") {
       checkRequestSource(req.headers); await bodyOf(req);
       if (!config.pcWorkerToken) { json(res,409,{error:"PC worker is not enabled."}); return; }
@@ -75,10 +76,17 @@ export async function handlePcTasks(req: IncomingMessage, res: ServerResponse, p
       if (task) json(res, 200, { task }); else json(res, 204); return;
     }
     if (!match || !uuid(body.lease)) throw new ChatRequestError(400, "Invalid task claim.");
+    if(match[2]==="job-state"){
+      const state=await pcSnapshot(dir);const task=state.tasks.find(t=>t.id===match[1]&&t.workerId===body.workerId&&t.lease===body.lease);
+      if(!task||task.plan?.kind!=="jobs"||task.status!=="running"){json(res,409,{error:"Shared tracker requires an active job task owned by this worker."});return;}
+      const offset=body.offset??0;
+      if(typeof offset!=="number"||!Number.isInteger(offset)||offset<0||offset>10000)throw new ChatRequestError(400,"Invalid tracker page.");
+      try{json(res,200,await sharedTrackerState(config,offset));}catch(e){json(res,503,{error:e instanceof Error?e.message:"Google tracker unavailable."});}return;
+    }
     if(match[2]==="submission"){
       const state=await pcSnapshot(dir);const task=state.tasks.find(t=>t.id===match[1]&&t.workerId===body.workerId&&t.lease===body.lease);
       if(!task||task.plan?.kind!=="jobs"||task.plan.action!=="submit"){json(res,409,{error:"Submission does not belong to an authorized job task."});return;}
-      try{const receipt=await recordSubmission(dir,task.id,task.plan.maxApplications,body.submission);json(res,200,{accepted:true,id:receipt.id,sync:receipt.sync});}
+      try{const receipt=await recordSubmission(dir,task.id,task.plan.maxApplications,body.submission);json(res,200,{accepted:true,id:receipt.id,sync:receipt.sync});void syncTracker(config);}
       catch(e){json(res,400,{error:e instanceof Error?e.message:"Invalid submission receipt."});}return;
     }
     if (match[2] === "heartbeat") {

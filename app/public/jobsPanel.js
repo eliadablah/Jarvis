@@ -68,7 +68,7 @@ export function startJobsPanel() {
     if (data.error) list.append(el('p', 'job-note', data.error));
     if (data.pendingGoogleSync) {
       list.append(el('p', 'job-note', `${data.pendingGoogleSync} awaiting Google sync · not included in counts`));
-      for (const pending of data.pendingApplications ?? []) list.append(el('p', 'job-note', `${pending.company} · ${pending.role} · Google sync pending`));
+      for (const pending of data.pendingApplications ?? []) list.append(el('p', 'job-note', `${pending.company} · ${pending.role} · ${pending.error || 'Syncing with Google'} · retrying automatically`));
     }
 
     const head = el('div', 'job-list-head');

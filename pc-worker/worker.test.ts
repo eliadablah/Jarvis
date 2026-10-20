@@ -38,7 +38,7 @@ test('quota after code tools permits inspected continuation without browser subm
  assert.equal(canFallback(run),false);assert.equal(reportedRun(run.report,workspace,true).failure,'quota');
  assert.match(DRAFT_GUIDANCE,/leaving it unsent/);assert.match(DRAFT_GUIDANCE,/report-only/);assert.match(DRAFT_GUIDANCE,/Preserve any existing draft/);
 });
-const agents: ExecutorStatus[] = [{ id: "claude-chrome", capabilities: ["jobs", "browser"], state: "ready", reason: "", remainingTokens: null }];
+const agents: ExecutorStatus[] = [{ id: "claude-chrome", capabilities: ["jobs", "browser"], features:["job-files-v1","task-sync-v1"], state: "ready", reason: "", remainingTokens: null }];
 const clock = new Date("2026-10-16T12:00:00Z");
 test("restart status keeps active tasks, bounds HTTPS and omits private data", async () => {
   const status = await readWorkerActivity("https://jarvis.example/", (async (url, options) => {

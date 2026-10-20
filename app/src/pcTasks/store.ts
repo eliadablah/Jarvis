@@ -65,6 +65,7 @@ export function enqueuePcTask(dir: string, request: string, requestId?: string, 
     if (existing) { if (existing.request !== request) throw new Error("Request ID already used."); return existing; }
     if (state.tasks.filter(active).length >= 100) throw new Error("PC queue is full.");
     const task: PcTask = { id: randomUUID(), kind: intent.plan.kind, plan: intent.plan, request,
+      ...(intent.plan.kind === "jobs" && intent.plan.action === "submit" ? {requiredFeature:"task-sync-v1" as const} : {}),
       status: "queued", createdAt: now.toISOString(), ...(displayRequest ? { displayRequest: displayRequest.slice(0, MAX_REQUEST_CHARS) } : {}), ...(requestId ? { requestId } : {}) };
     state.tasks.push(task); return task;
   }, now);

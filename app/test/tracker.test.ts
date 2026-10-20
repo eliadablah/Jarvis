@@ -43,6 +43,8 @@ test("signs a verifiable service account JWT and rejects bad keys", () => {
   assert.equal(createVerify("RSA-SHA256").update(h + "." + c).verify(publicKey, Buffer.from(s, "base64url")), true);
   const claims = JSON.parse(Buffer.from(c, "base64url").toString());
   assert.equal(claims.scope, "https://www.googleapis.com/auth/spreadsheets.readonly");
+  const writeClaims=JSON.parse(Buffer.from(signJwt(account,1_000_000,true).split(".")[1]!,"base64url").toString());
+  assert.equal(writeClaims.scope,"https://www.googleapis.com/auth/spreadsheets");
   assert.equal(claims.exp - claims.iat, 3600);
   assert.throws(() => readServiceAccount(Buffer.from('{"client_email":"a"}').toString("base64")), /Invalid/);
 });

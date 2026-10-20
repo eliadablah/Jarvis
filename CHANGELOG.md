@@ -2,6 +2,12 @@
 
 ## 2026-10-19
 
+### Feature - Approved automatic Google logging and shared job history
+
+- Following explicit approval, verified submission receipts sync automatically to the configured Google tracker using only Company, Role, Date Applied, Stage and Posting URL. Confirmation text and task IDs stay in Jarvis. Writes use separate OAuth tokens, literal cell values, URL deduplication, native formatting/validation and readback. Advanced/closed stages are preserved. Ambiguous delivery checks Google before retrying; durable receipts survive restarts with bounded backoff and visible errors.
+- Claude and Codex job tasks gain a task/worker/lease-bound shared_job_state tool containing company, role, stage, posting URL and aggregate totals, with pagination. It excludes CVs, notes and other columns. Both providers log each confirmed submission through the same deterministic path.
+- The existing service account was granted Editor on the existing tracker only and permissions were read back. New submission tasks wait for a receipt-capable worker. 123 app/40 worker tests and builds/typechecks pass; no fabricated tracker row or real job submission was created for tests. Local worker activation remains necessary; actual first live receipt delivery is not yet exercised.
+
 ### Fix - Google tracker as the live dashboard source of truth
 
 - Google rows and totals are authoritative. Pending local confirmations appear separately and never inflate the Google counts. An outage shows saved/unknown state rather than false live totals.

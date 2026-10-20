@@ -1,13 +1,13 @@
 import {test} from "node:test";
 import assert from "node:assert/strict";
-import {mkdtemp,rm} from "node:fs/promises";
+import {mkdtemp,rm,writeFile} from "node:fs/promises";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
 import {randomUUID} from "node:crypto";
 import {createServer} from "node:http";
 import {recordSubmission,readSubmissions} from "../src/jobs/submissions.ts";
 import {enqueuePcTask,claimNextPcTask,finishPcTask,retryPcTask} from "../src/pcTasks/store.ts";
-import {trackerView} from "../src/jobs/api.ts";
+import {trackerView,syncPendingReceipts} from "../src/jobs/api.ts";
 import {trackerChangeCheck} from "../src/jobs/watch.ts";
 import {summarize} from "../src/jobs/tracker.ts";
 import {handlePcTasks} from "../src/pcTasks/api.ts";
@@ -15,6 +15,19 @@ import {loadConfig} from "../src/config.ts";
 import {handleLive,publishUpdate,closeLiveClients} from "../src/live.ts";
 const agents=[{id:"codex-computer",state:"ready" as const,reason:"ready",remainingTokens:null,capabilities:["jobs" as const],features:["job-files-v1" as const,"task-sync-v1" as const]}];
 const receipt=(n:number)=>({company:"Example "+n,role:"Support",url:"https://example.com/jobs/"+n,confirmation:"Application received"});
+test("Google sync errors persist, back off, and recover without replaying the application",async()=>{
+ const dir=await mkdtemp(join(tmpdir(),"jarvis-google-outbox-"));
+ try{
+   await recordSubmission(dir,"task",1,receipt(1));let calls=0;
+   const fail={record:async()=>{calls++;throw Error("Google tracker sync returned HTTP 403. Check Editor access.");}};
+   await syncPendingReceipts(dir,fail);await syncPendingReceipts(dir,fail);assert.equal(calls,1);
+   const rows=await readSubmissions(dir);assert.equal(rows[0]!.sync,"pending");assert.match(rows[0]!.error!,/403/);assert.ok(rows[0]!.retryAt!>Date.now());
+   rows[0]!.retryAt=0;await writeFile(join(dir,"submissions.json"),JSON.stringify(rows));
+   await syncPendingReceipts(dir,{record:async()=>{calls++;}});
+   await syncPendingReceipts(dir,{record:async()=>{throw Error("Already synced rows must not write again");}});
+   const recovered=(await readSubmissions(dir))[0]!;assert.equal(calls,2);assert.equal(recovered.sync,"synced");assert.equal(recovered.error,undefined);
+ }finally{await rm(dir,{recursive:true,force:true});}
+});
 test("old submission history does not fulfill a new task; retry reads only its own receipts",async()=>{
  const dir=await mkdtemp(join(tmpdir(),"jarvis-scope-"));try{
   const old=await enqueuePcTask(dir,"Apply to 5 job applications");const worker=randomUUID();const oldClaim=await claimNextPcTask(dir,worker,agents);
@@ -38,6 +51,9 @@ test("receipt endpoint checks owner/lease, persists once and enforces the task c
   const send=(lease:string,value=receipt(1))=>fetch(url,{method:"POST",headers:{Authorization:"Bearer test","Content-Type":"application/json"},body:JSON.stringify({protocol:2,workerId:worker,lease,submission:value})});
   assert.equal((await send(randomUUID())).status,409);
   const a=await send(claim!.lease!);assert.equal(a.status,200);const first=await a.json();
+  const shared=(lease:string)=>fetch(url.replace(/submission$/,"job-state"),{method:"POST",headers:{Authorization:"Bearer test","Content-Type":"application/json"},body:JSON.stringify({protocol:2,workerId:worker,lease})});
+  assert.equal((await shared(randomUUID())).status,409);
+  assert.equal((await shared(claim!.lease!)).status,503,"valid job owner receives explicit unconfigured tracker error");
   const duplicate=await(await send(claim!.lease!)).json();assert.equal(first.id,duplicate.id);
   assert.equal((await send(claim!.lease!,receipt(2))).status,400);assert.equal((await readSubmissions(dir)).length,1);
  }finally{server.closeAllConnections();await new Promise<void>(r=>server.close(()=>r()));if(prior===undefined)delete process.env.JARVIS_DATA_DIR;else process.env.JARVIS_DATA_DIR=prior;await rm(dir,{recursive:true,force:true});}
