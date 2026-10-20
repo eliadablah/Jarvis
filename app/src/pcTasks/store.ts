@@ -3,7 +3,7 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { parsePcIntent } from "./intent.ts";
-import { MAX_REQUEST_CHARS, capabilityFor, validateReport, type PcPlan, type PcReport, type ExecutorStatus, type PcLimits, type ToolProfile } from "./protocol.ts";
+import { MAX_REQUEST_CHARS, capabilityFor, validateReport, type PcPlan, type PcReport, type ExecutorStatus, type PcLimits, type ToolProfile, type PcApproval } from "./protocol.ts";
 export { MAX_REQUEST_CHARS } from "./protocol.ts";
 export type PcTaskStatus = "queued" | "running" | "cancelling" | "completed" | "partial" | "needs_input" | "needs_attention" | "failed" | "cancelled" | "done";
 export interface PcTask {
@@ -14,8 +14,9 @@ export interface PcTask {
   activity?: { at: string; text: string }[];
   cancelRequested?: boolean; report?: PcReport; reportId?: string; requestId?: string;
   retryOf?: string; retryTaskId?: string;
-  requiredFeature?: "job-files-v1" | "task-sync-v1" | "personal-tools-v1";
+  requiredFeature?: "job-files-v1" | "task-sync-v1" | "personal-tools-v1" | "full-tools-v2";
   toolProfile?: ToolProfile;
+  approvals?: PcApproval[];
   applicationScope?: {rootTaskId:string;requested:number;confirmedUrls:string[];startedAt:string};
 }
 export const MAX_ACTIVITY = 12;
@@ -68,7 +69,7 @@ export function enqueuePcTask(dir: string, request: string, requestId?: string, 
     const task: PcTask = { id: randomUUID(), kind: intent.plan.kind, plan: intent.plan, request,
       toolProfile,
       ...(intent.plan.kind === "jobs" && intent.plan.action === "submit" ? {requiredFeature:"task-sync-v1" as const} : {}),
-      ...(toolProfile === "personal" && intent.plan.kind !== "desktop" ? {requiredFeature:"personal-tools-v1" as const} : {}),
+      ...(toolProfile === "personal" && intent.plan.kind !== "desktop" ? {requiredFeature:"full-tools-v2" as const} : {}),
       status: "queued", createdAt: now.toISOString(), ...(displayRequest ? { displayRequest: displayRequest.slice(0, MAX_REQUEST_CHARS) } : {}), ...(requestId ? { requestId } : {}) };
     state.tasks.push(task); return task;
   }, now);
@@ -97,7 +98,7 @@ export function retryPcTask(dir: string, id: string, now = new Date()): Promise<
     const task: PcTask = {id:randomUUID(),kind:intent.plan.kind,plan:intent.plan,request,status:"queued",createdAt:now.toISOString(),retryOf:id,
       toolProfile: source.toolProfile ?? "scoped",
       displayRequest:"Try again: " + (source.displayRequest ?? source.request).slice(0,1800), ...(intent.plan.kind === "jobs" ? { requiredFeature: "task-sync-v1" as const } : {})};
-    if(task.toolProfile === "personal" && task.plan?.kind !== "desktop") task.requiredFeature = "personal-tools-v1";
+    if(task.toolProfile === "personal" && task.plan?.kind !== "desktop") task.requiredFeature = "full-tools-v2";
     source.retryTaskId = task.id;
     state.tasks.push(task); return task;
   },now);
@@ -108,8 +109,9 @@ export function claimNextPcTask(dir: string, workerId: string, executors: Execut
     if (state.tasks.some(t => ["running", "cancelling"].includes(t.status))) return;
     const task = state.tasks.find(t => t.status === "queued"); if (!task) return;
     if (!task.plan) { task.status = "needs_input"; task.result = "Older task needs an explicit search, prepare, or submit request."; return; }
+    if(task.toolProfile==="personal" && task.requiredFeature==="personal-tools-v1")task.requiredFeature="full-tools-v2";
     const candidates = executors.filter(e => e.capabilities.includes(capabilityFor(task.plan!)) && (!task.requiredFeature || e.features?.includes(task.requiredFeature)));
-    if (task.requiredFeature && !candidates.length) { task.progress = task.requiredFeature === "personal-tools-v1" ? "Waiting for the updated worker to connect your Claude Code and Codex tools. Restart the idle PC worker to activate them." : "Waiting for the updated worker with task-scoped submission receipts. Restart the idle PC worker to activate the fix."; return; }
+    if (task.requiredFeature && !candidates.length) { task.progress = task.requiredFeature === "personal-tools-v1" || task.requiredFeature === "full-tools-v2" ? "Waiting for the updated worker to connect your Claude Code and Codex tools. Restart the idle PC worker to activate them." : "Waiting for the updated worker with task-scoped submission receipts. Restart the idle PC worker to activate the fix."; return; }
     if (!candidates.some(e => e.state === "ready")) {
       task.progress = candidates.some(e => e.state === "cooldown") ? "Waiting for a capable agent's usage limit to reset." : "No ready agent has the required tools. Check PC agents.";
       if (!candidates.length && ["computer", "browser.execute"].includes(capabilityFor(task.plan))) { task.progress = "Waiting for the updated PC worker to connect its action tools. Restart the idle worker to activate them."; }
@@ -182,6 +184,29 @@ export function setPcLimits(dir: string, limits: PcLimits, now = new Date()) {
 }
 export function workerOnline(state: PcTaskState, now = Date.now()): boolean {
   return Boolean(state.workerSeenAt && now - Date.parse(state.workerSeenAt) < LEASE_MS);
+}
+export function requestPcApproval(dir:string,id:string,workerId:string,lease:string,request:unknown,now=new Date()) {
+ return mutate(dir,state=>{
+  const task=state.tasks.find(t=>t.id===id&&t.workerId===workerId&&t.lease===lease&&t.status==="running"&&!t.cancelRequested&&t.toolProfile==="personal");if(!task)return;
+  const value=request as Partial<PcApproval>;
+  if(!value||typeof value.id!=="string"||!/^[a-f0-9-]{36}$/i.test(value.id)||!["claude","codex"].includes(value.provider??"")||typeof value.tool!=="string"||!value.tool||value.tool.length>200||typeof value.details!=="string"||!value.details||value.details.length>12000||typeof value.fingerprint!=="string"||!/^[a-f0-9]{64}$/.test(value.fingerprint))throw Error("Invalid approval request.");
+  const rows=task.approvals??=[];const existing=rows.find(r=>r.id===value.id);
+  if(existing){if(existing.fingerprint!==value.fingerprint||existing.tool!==value.tool||existing.details!==value.details||existing.provider!==value.provider)throw Error("Approval request changed.");return existing;}
+  if(rows.length>=100||rows.filter(r=>!r.decision&&Date.parse(r.expiresAt)>now.getTime()).length>=10)throw Error("Too many approval requests.");
+  const row:PcApproval={id:value.id,provider:value.provider as PcApproval["provider"],tool:value.tool,details:value.details,fingerprint:value.fingerprint,createdAt:now.toISOString(),expiresAt:new Date(now.getTime()+15*60000).toISOString()};rows.push(row);return row;
+ },now);
+}
+export function readPcApproval(dir:string,id:string,workerId:string,lease:string,approvalId:string,now=new Date()) {
+ return mutate(dir,state=>{const task=state.tasks.find(t=>t.id===id&&t.workerId===workerId&&t.lease===lease&&t.status==="running"&&!t.cancelRequested);const row=task?.approvals?.find(r=>r.id===approvalId);return row?{...row,...(Date.parse(row.expiresAt)<=now.getTime()?{decision:"deny" as const}: {})}:undefined;},now);
+}
+export function decidePcApproval(dir:string,id:string,approvalId:string,decision:unknown,answer:unknown,now=new Date()) {
+ return mutate(dir,state=>{
+  if(!["allow","deny"].includes(String(decision))||answer!==undefined&&(typeof answer!=="string"||answer.length>4000))throw Error("Invalid approval answer.");
+  const task=state.tasks.find(t=>t.id===id&&t.status==="running"&&!t.cancelRequested);const row=task?.approvals?.find(r=>r.id===approvalId);if(!row)return;
+  if(Date.parse(row.expiresAt)<=now.getTime())throw Error("Approval expired. The task must request it again.");
+  if(row.decision&&(row.decision!==decision||row.answer!==answer))throw Error("Approval was already answered.");
+  row.decision=decision as "allow"|"deny";if(typeof answer==="string")row.answer=answer;row.decidedAt??=now.toISOString();return row;
+ },now);
 }
 /** Do not expose the bearer-equivalent claim lease to browsers or chat models. */
 export function publicTask(task: PcTask): Omit<PcTask, "lease" | "workerId" | "reportId" | "requestId" | "displayRequest"> {

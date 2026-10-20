@@ -1,0 +1,52 @@
+import {test} from "node:test";
+import assert from "node:assert/strict";
+import {mkdtemp,rm} from "node:fs/promises";
+import {join} from "node:path";
+import {tmpdir} from "node:os";
+import {randomUUID} from "node:crypto";
+import {createServer} from "node:http";
+import {loadConfig} from "../src/config.ts";
+import {enqueuePcTask,claimNextPcTask,cancelPcTask} from "../src/pcTasks/store.ts";
+import {approvalTokens,verifyApprovalToken} from "../src/pcTasks/approvalAuth.ts";
+import type {IncomingMessage,ServerResponse} from "node:http";
+import {handlePcTasks} from "../src/pcTasks/api.ts";
+test("approvals require the worker lease to request and a browser session plus action token to decide",async()=>{
+ const dir=await mkdtemp(join(tmpdir(),"jarvis-approval-")),previous=process.env.JARVIS_DATA_DIR;process.env.JARVIS_DATA_DIR=dir;
+ const config=loadConfig({PC_WORKER_TOKEN:"worker-secret"}),worker=randomUUID();
+ const server=createServer((req,res)=>{void handlePcTasks(req,res,new URL(req.url!,"http://localhost").pathname,config);});
+ try{
+  const task=await enqueuePcTask(dir,"Find support jobs");
+  const claim=await claimNextPcTask(dir,worker,[{id:"claude-chrome",state:"ready",reason:"ready",remainingTokens:null,capabilities:["jobs"],features:["full-tools-v2","task-sync-v1"]}]);assert.ok(claim);
+  await new Promise<void>(resolve=>server.listen(0,"127.0.0.1",resolve));const addr=server.address();assert.ok(addr&&typeof addr==="object");const base="http://127.0.0.1:"+addr.port;
+  const request={id:randomUUID(),provider:"claude",tool:"Bash",details:'{"command":"show public documentation"}',fingerprint:"a".repeat(64),decision:"allow"};
+  const workerPost=(body:unknown,lease=claim.lease)=>fetch(base+"/api/pc/tasks/"+task.id+"/approval",{method:"POST",headers:{Authorization:"Bearer worker-secret","Content-Type":"application/json"},body:JSON.stringify({protocol:2,workerId:worker,lease,...body as object})});
+  assert.equal((await workerPost({request},randomUUID())).status,409);
+  const created=await(await workerPost({request})).json();assert.equal(created.approval.decision,undefined,"workers cannot grant their own request");
+  assert.equal((await workerPost({request:{...request,details:"changed operation"}})).status,400);
+  const decisionPath=base+"/api/pc/tasks/"+task.id+"/approvals/"+request.id+"/decision";
+  const decide=(body:unknown,cookie="",origin?:string)=>fetch(decisionPath,{method:"POST",headers:{"Content-Type":"application/json","x-jarvis-chat":"1",Cookie:cookie,...(origin?{Origin:origin}:{})},body:JSON.stringify(body)});
+  assert.equal((await decide({decision:"allow"})).status,403);
+  const snapshot=await fetch(base+"/api/pc/tasks");const cookie=snapshot.headers.get("set-cookie")!.split(";")[0]!;
+  assert.match(snapshot.headers.get("set-cookie")!,/HttpOnly; SameSite=Strict/);
+  const view=await snapshot.json(),approval=view.tasks[0].approvals[0];assert.equal(view.tasks[0].lease,undefined);
+  const body={decision:"allow",decisionToken:approval.decisionToken};
+  assert.equal((await decide(body)).status,403,"token alone is insufficient");
+  assert.equal((await decide({...body,decisionToken:"b".repeat(64)},cookie)).status,403);
+  assert.equal((await decide(body,cookie,"https://other.example")).status,403);
+  assert.equal((await decide(body,cookie)).status,200);assert.equal((await decide(body,cookie)).status,200);
+  assert.equal((await decide({...body,decision:"deny"},cookie)).status,409,"one decision cannot be reversed");
+  assert.equal((await(await workerPost({approvalId:request.id})).json()).approval.decision,"allow");
+  await cancelPcTask(dir,task.id);
+  assert.equal((await workerPost({approvalId:request.id})).status,409,"cancelled tasks cannot collect even a previously granted approval");
+ }finally{server.closeAllConnections();await new Promise<void>(resolve=>server.close(()=>resolve()));if(previous===undefined)delete process.env.JARVIS_DATA_DIR;else process.env.JARVIS_DATA_DIR=previous;await rm(dir,{recursive:true,force:true});}
+});
+test("approval capabilities expire and are bound to the original action and worker lease",()=>{
+ const now=Date.now(),id=randomUUID(),task={id:randomUUID(),workerId:randomUUID(),lease:randomUUID(),approvals:[{id,fingerprint:"a".repeat(64),expiresAt:new Date(now+60000).toISOString()}]};
+ let cookie="";const res={setHeader:(_name:string,value:string)=>{cookie=value.split(";")[0]!;}} as unknown as ServerResponse;
+ const tokens=approvalTokens({headers:{host:"localhost"}} as IncomingMessage,res,[task],now);
+ const token=(tokens.get(task.id)![0] as any).decisionToken,req={headers:{cookie}} as IncomingMessage;
+ assert.equal(verifyApprovalToken(req,task,id,token,now),true);
+ assert.equal(verifyApprovalToken(req,{...task,lease:randomUUID()},id,token,now),false);
+ assert.equal(verifyApprovalToken(req,{...task,approvals:[{...task.approvals[0]!,fingerprint:"b".repeat(64)}]},id,token,now),false);
+ assert.equal(verifyApprovalToken(req,task,id,token,now+60001),false);
+});

@@ -13,7 +13,7 @@ import {summarize} from "../src/jobs/tracker.ts";
 import {handlePcTasks} from "../src/pcTasks/api.ts";
 import {loadConfig} from "../src/config.ts";
 import {handleLive,publishUpdate,closeLiveClients} from "../src/live.ts";
-const agents=[{id:"codex-computer",state:"ready" as const,reason:"ready",remainingTokens:null,capabilities:["jobs" as const],features:["job-files-v1" as const,"task-sync-v1" as const,"personal-tools-v1" as const]}];
+const agents=[{id:"codex-computer",state:"ready" as const,reason:"ready",remainingTokens:null,capabilities:["jobs" as const],features:["job-files-v1" as const,"task-sync-v1" as const,"full-tools-v2" as const]}];
 const receipt=(n:number)=>({company:"Example "+n,role:"Support",url:"https://example.com/jobs/"+n,confirmation:"Application received"});
 test("direct requests use personal tools, scheduled profiles and retry scopes remain explicit",async()=>{
  const dir=await mkdtemp(join(tmpdir(),"jarvis-profile-"));try{

@@ -9,6 +9,8 @@ import { claimNextPcTask, finishPcTask, heartbeatPcTask, cancelPcTask, retryPcTa
 import {recordSubmission,readSubmissions} from "../jobs/submissions.ts";
 import {publishUpdate} from "../live.ts";
 import {syncTracker,sharedTrackerState} from "../jobs/api.ts";
+import {requestPcApproval,readPcApproval,decidePcApproval} from "./store.ts";
+import {approvalTokens,verifyApprovalToken} from "./approvalAuth.ts";
 function json(res: ServerResponse, status: number, value?: unknown): void {
   res.writeHead(status, { ...appHeaders(), "Content-Type": "application/json", "Cache-Control": "no-store" });
   res.end(value === undefined ? undefined : JSON.stringify(value));
@@ -31,7 +33,7 @@ function executorsOf(value: unknown): ExecutorStatus[] {
     /^[a-z-]{1,60}$/.test(e.id) && ["ready", "cooldown", "unavailable"].includes(e.state) &&
     typeof e.reason === "string" && e.reason.length <= 300 && e.remainingTokens === null &&
     (e.retryAt === undefined || typeof e.retryAt === "string" && Number.isFinite(Date.parse(e.retryAt))) &&
-    (e.features === undefined || Array.isArray(e.features) && e.features.length <= 3 && e.features.every((f: unknown) => f === "job-files-v1" || f === "task-sync-v1" || f === "personal-tools-v1")) &&
+    (e.features === undefined || Array.isArray(e.features) && e.features.length <= 4 && e.features.every((f: unknown) => f === "job-files-v1" || f === "task-sync-v1" || f === "personal-tools-v1" || f === "full-tools-v2")) &&
     Array.isArray(e.capabilities) && e.capabilities.length <= 4 && e.capabilities.every((c: string) => CAPABILITIES.includes(c as typeof CAPABILITIES[number]))))
     throw new ChatRequestError(400, "Invalid agent capabilities.");
   return value;
@@ -42,11 +44,18 @@ export async function handlePcTasks(req: IncomingMessage, res: ServerResponse, p
     if (path === "/api/pc/tasks" && (method === "GET" || method === "HEAD")) {
       const state = await pcSnapshot(dir);
       const receipts=await readSubmissions(dir);
+      const approvals=approvalTokens(req,res,state.tasks);
       json(res, 200, { protocol: PC_PROTOCOL, enabled: Boolean(config.pcWorkerToken), workerOnline: workerOnline(state), workerSeenAt: state.workerSeenAt,
-        executors: state.executors ?? [], limits: state.limits ?? {}, tasks: state.tasks.slice(-100).reverse().map(task=>({...publicTask(task),confirmedThisTask:receipts.filter(r=>r.taskId===task.id).length})) }); return;
+        executors: state.executors ?? [], limits: state.limits ?? {}, tasks: state.tasks.slice(-100).reverse().map(task=>({...publicTask(task),approvals:approvals.get(task.id)??[],confirmedThisTask:receipts.filter(r=>r.taskId===task.id).length})) }); return;
     }
     if (method !== "POST") { json(res, 405, { error: "Method not allowed" }); return; }
-    const match = /^\/api\/pc\/tasks\/([0-9a-f-]{36})\/(result|heartbeat|cancel|retry|submission|job-state)$/.exec(path);
+    const decisionMatch=/^\/api\/pc\/tasks\/([0-9a-f-]{36})\/approvals\/([0-9a-f-]{36})\/decision$/.exec(path);
+    if(decisionMatch){
+      checkRequestSource(req.headers);const body=await bodyOf(req);const task=(await pcSnapshot(dir)).tasks.find(t=>t.id===decisionMatch[1]);
+      if(!task||!verifyApprovalToken(req,task,decisionMatch[2]!,body.decisionToken)){json(res,403,{error:"Open this approval in your Jarvis dashboard session before answering."});return;}
+      try{const approval=await decidePcApproval(dir,decisionMatch[1]!,decisionMatch[2]!,body.decision,body.answer);json(res,approval?200:409,approval?{saved:true}:{error:"This approval is no longer active."});publishUpdate("pc");}catch(e){json(res,409,{error:e instanceof Error?e.message:"Approval failed."});}return;
+    }
+    const match = /^\/api\/pc\/tasks\/([0-9a-f-]{36})\/(result|heartbeat|cancel|retry|submission|job-state|approval)$/.exec(path);
     if (match?.[2] === "retry") {
       checkRequestSource(req.headers); await bodyOf(req);
       if (!config.pcWorkerToken) { json(res,409,{error:"PC worker is not enabled."}); return; }
@@ -76,6 +85,11 @@ export async function handlePcTasks(req: IncomingMessage, res: ServerResponse, p
       if (task) json(res, 200, { task }); else json(res, 204); return;
     }
     if (!match || !uuid(body.lease)) throw new ChatRequestError(400, "Invalid task claim.");
+    if(match[2]==="approval"){
+      try{const approval=body.request?await requestPcApproval(dir,match[1]!,body.workerId,body.lease,body.request):typeof body.approvalId==="string"?await readPcApproval(dir,match[1]!,body.workerId,body.lease,body.approvalId):undefined;
+        json(res,approval?200:409,approval?{approval}:{error:"Approval does not belong to an active task."});if(body.request&&approval)publishUpdate("pc");
+      }catch(e){json(res,400,{error:e instanceof Error?e.message:"Invalid approval."});}return;
+    }
     if(match[2]==="job-state"){
       const state=await pcSnapshot(dir);const task=state.tasks.find(t=>t.id===match[1]&&t.workerId===body.workerId&&t.lease===body.lease);
       if(!task||task.plan?.kind!=="jobs"||task.status!=="running"){json(res,409,{error:"Shared tracker requires an active job task owned by this worker."});return;}

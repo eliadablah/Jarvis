@@ -2,12 +2,13 @@
 
 ## 2026-10-20
 
-### Feature - Personal Claude Code/Codex tools for direct Jarvis requests
+### Feature - Personal Claude Code/Codex tools and dashboard approval relay
 
-- Direct PC requests now inherit the user's installed tools, plugins, skills and settings. Claude no longer receives restrictive tool/skill filters for these requests; Codex loads the normal .codex profile instead of the worker's separate home. No new approval/sandbox overrides are added to personal runs. Existing scoped launches remain available for scheduled runs and older tasks. Task retries preserve their profile; new personal requests wait for personal-tools-v1.
+- Direct PC requests inherit the user's installed tools, plugins, skills and settings. The Claude Agent SDK and Codex app-server relay approval and input requests to PC activity, pause, then resume the same turn after an actual Allow once / Deny answer. Browser sessions and action tokens bind each response to the current worker/task lease. Expiry, cancellation and unknown requests fail closed. New personal tasks wait for full-tools-v2; scheduled and legacy profiles remain scoped.
 - Job limits, verified receipts, Google synchronization, task ownership and duplicate checks remain in place. Server chat remains read-only. Tool availability does not grant authority for unrelated actions or bypass configured permissions.
-- Validation: 124 app/41 worker tests pass, including profile inheritance, scheduler separation, old-worker gating and absence of permission overrides. A real Claude launch loaded 103 tools and the installed Firecrawl plugin, discovered the connected Firecrawl search tool, then respected its existing permission refusal. No search ran. Normal Codex startup remains unverified because Windows denied access to its state databases in this diagnostic session, even after a filesystem grant. No ACLs or approval settings changed.
-- Automatic review rejected an initial launch design that overrode permission behavior. The final implementation inherits existing policy without those overrides. Firecrawl's exact search permission and local worker activation remain pending.
+- Firecrawl search/scrape were explicitly approved and are granted only to personal Claude child runs. A real connected Firecrawl public-documentation search succeeded. Personal job prompts no longer incorrectly forbid Firecrawl. No blanket approval/sandbox policy overrides or saved credential changes are added.
+- Validation: 126 app and 48 worker tests, TypeScript checks and a local browser approval-form check cover inheritance, request authentication, expiry, cancellation and same-turn continuation. Live SDK/app-server approval verification remains blocked in this managed Windows session by two-way child-process pipe denial and Codex state-database access denial. The idle worker needs activation from normal PowerShell. No ACLs were changed.
+- Automatic review rejected earlier permission overrides and an endpoint missing browser-session/CSRF/lease binding. The final design inherits provider policy and binds each dashboard answer to its immutable action and current lease.
 
 ## 2026-10-19
 

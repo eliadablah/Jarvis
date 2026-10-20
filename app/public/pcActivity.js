@@ -22,6 +22,9 @@ export function mountPcActivity({ api, safe, modal, toast, navigate }) {
   const labels = { queued: 'Queued', running: 'Running', cancelling: 'Stopping', completed: 'Completed', partial: 'Partly completed', needs_input: 'Needs you', needs_attention: 'Connection lost · review', failed: 'Failed', cancelled: 'Cancelled', done: 'Legacy run · see report' };
   let state = { tasks: [], executors: [] }, loading = false, firstLoad = true;
   const observed = new Map();
+  const approvalAnswers = new Map();
+  const seenApprovals = new Set();
+  let renderedHtml = '';
   // Usage limits: bars in this card and a copy in the side panel that is always on screen.
   const sideBox = (() => {
     const connections = document.querySelector('.connections');
@@ -34,6 +37,10 @@ export function mountPcActivity({ api, safe, modal, toast, navigate }) {
   // --- Live view: a running task shows that the PC is working, not just a status word ---
   const fmt = ms => { const s = Math.max(0, Math.round(ms / 1000)); return s < 60 ? s + 's' : Math.floor(s / 60) + 'm ' + String(s % 60).padStart(2, '0') + 's'; };
   const since = iso => iso ? fmt(Date.now() - Date.parse(iso)) : '';
+  function approvalBlock(task) {
+    return (task.approvals || []).filter(a=>!a.decision&&Date.parse(a.expiresAt)>Date.now()&&task.status==='running').map(a=>
+      '<div class="pc-failure"><strong>Jarvis needs your approval</strong><p>'+safe(a.provider+' · '+a.tool)+'</p><pre style="white-space:pre-wrap;max-height:260px;overflow:auto">'+safe(a.details)+'</pre><label>Answer, if Jarvis asked a question<input data-approval-answer="'+safe(a.id)+'" maxlength="4000" autocomplete="off"></label><div class="pc-task-actions"><button class="text-btn" data-approval="'+safe(a.id)+'" data-task="'+safe(task.id)+'" data-choice="allow">Allow once / Continue</button><button class="text-btn" data-approval="'+safe(a.id)+'" data-task="'+safe(task.id)+'" data-choice="deny">Deny</button></div></div>').join('');
+  }
   function liveBlock(task) {
     if (!['running', 'cancelling'].includes(task.status)) return '';
     const beat = Date.parse(task.heartbeatAt || task.startedAt || task.createdAt);
@@ -53,6 +60,9 @@ export function mountPcActivity({ api, safe, modal, toast, navigate }) {
     try {
       const next = await api('/api/pc/tasks');
       for (const task of next.tasks) {
+        for(const approval of task.approvals||[])if(!approval.decision&&Date.parse(approval.expiresAt)>Date.now()&&!seenApprovals.has(approval.id)){
+          seenApprovals.add(approval.id);if(!firstLoad)toast('Jarvis needs your approval: '+approval.tool+'. Open PC activity.');
+        }
         if (!firstLoad && observed.has(task.id) && observed.get(task.id) !== task.status && ['completed','partial','needs_input','needs_attention','failed','cancelled'].includes(task.status))
           toast('PC task: ' + labels[task.status] + '. ' + (failureMessage(task) || 'Open PC activity for the report.').slice(0,240));
         observed.set(task.id, task.status);
@@ -64,20 +74,37 @@ export function mountPcActivity({ api, safe, modal, toast, navigate }) {
       if (row) { row.querySelector('span').textContent = 'PC worker'; row.querySelector('.connection-status').textContent = state.workerOnline ? 'Online' : 'Offline'; }
       const ready=(state.executors || []).filter(e=>e.state==='ready');
       document.querySelector('#pc-agents-summary').textContent = ready.length+' agents · browser actions '+(ready.some(e=>e.capabilities.includes('browser.execute'))?'ready':'needs update')+' · Windows '+(ready.some(e=>e.capabilities.includes('computer'))?'ready':'needs setup');
-      const html = state.tasks.length ? state.tasks.slice(0, 12).map(task =>
+      const waiting=t=>t.status==='running'&&(t.approvals||[]).some(a=>!a.decision&&Date.parse(a.expiresAt)>Date.now());
+      const ordered=[...state.tasks.filter(waiting),...state.tasks.filter(t=>!waiting(t))];
+      const html = state.tasks.length ? ordered.slice(0, 12).map(task =>
         '<article class="pc-task" data-status="' + safe(task.status) + '"><div class="pc-task-top"><span class="tag">' + safe(labels[task.status] || task.status) +
-        '</span><small>' + safe(task.executor || task.plan?.kind || 'PC') + '</small></div><h3>' + safe(task.request) + '</h3>' + (task.confirmedThisTask ? '<p>' + safe(task.confirmedThisTask) + ' new confirmations recorded for this task.</p>' : '') + (liveBlock(task) || '<p>' +
+        '</span><small>' + safe(task.executor || task.plan?.kind || 'PC') + '</small></div><h3>' + safe(task.request) + '</h3>' + (task.confirmedThisTask ? '<p>' + safe(task.confirmedThisTask) + ' new confirmations recorded for this task.</p>' : '') + approvalBlock(task) + (liveBlock(task) || '<p>' +
         safe((task.progress || task.result || 'Waiting for a capable local agent.').slice(0,220)) + '</p>') + (failureMessage(task) ? '<div class="pc-failure"><strong>Why it stopped</strong><p>' + safe(failureMessage(task)) + '</p><small>' + (task.status==='needs_attention' ? 'The outcome is uncertain. Check the destination before repeating it.' : 'Try again checks existing work first. Access restrictions or missing answers may still need resolving.') + '</small></div>' : '') + '<div class="pc-task-actions"><button class="text-btn" data-pc-report="' +
         safe(task.id) + '">Details</button>' + (canRetryTask(task) ? '<button class="text-btn" data-pc-retry="' + safe(task.id) + '">Try again' + (task.plan.kind==='jobs' && task.report?.submitted ? ' · remaining only' : '') + '</button>' : '') + (['queued','running'].includes(task.status) ? '<button class="text-btn" data-pc-cancel="' +
         safe(task.id) + '">Cancel task</button>' : '') + '</div></article>').join('') :
         '<div class="pc-empty"><strong>Start with a clear request.</strong><p>“Find support jobs, but do not apply.”<br>“In my assistant workspace, create a budget template.”<br>“Open Calculator.”</p></div>';
-      const list = document.querySelector('#pc-task-list'); if (list.innerHTML !== html) { list.innerHTML = html; ticker(); }
+      const list = document.querySelector('#pc-task-list'); if (renderedHtml !== html) {
+        const focused=document.activeElement,answerId=focused?.dataset?.approvalAnswer;
+        const selection=answerId?[focused.selectionStart,focused.selectionEnd]:null;
+        list.querySelectorAll('[data-approval-answer]').forEach(n=>approvalAnswers.set(n.dataset.approvalAnswer,n.value));
+        list.innerHTML = html; renderedHtml=html;
+        list.querySelectorAll('[data-approval-answer]').forEach(n=>{n.value=approvalAnswers.get(n.dataset.approvalAnswer)||'';});ticker();
+        if(answerId){const input=list.querySelector('[data-approval-answer="'+answerId+'"]');if(input){input.focus({preventScroll:true});if(selection)input.setSelectionRange(...selection);}}
+      }
     } catch {
       document.querySelector('#pc-connection').textContent = 'Connection unavailable';
       document.querySelector('#pc-agents-summary').textContent = 'Last known activity · reconnecting';
     } finally { loading = false; }
   }
   card.addEventListener('click', async event => {
+    const approvalButton=event.target.closest('[data-approval]');
+    if(approvalButton){
+      const task=state.tasks.find(t=>t.id===approvalButton.dataset.task),approval=task?.approvals?.find(a=>a.id===approvalButton.dataset.approval);
+      if(!approval?.decisionToken)return;
+      const answer=card.querySelector('[data-approval-answer="'+approval.id+'"]')?.value;
+      approvalButton.disabled=true;
+      try{await api('/api/pc/tasks/'+task.id+'/approvals/'+approval.id+'/decision','POST',{decision:approvalButton.dataset.choice,decisionToken:approval.decisionToken,...(answer?{answer}: {})});toast(approvalButton.dataset.choice==='allow'?'Approved this action. Jarvis will continue.':'Denied. Jarvis will receive your answer.');await refresh();}catch(e){toast(e.message);approvalButton.disabled=false;}return;
+    }
     const retry = event.target.closest('[data-pc-retry]');
     if (retry) {
       retry.disabled = true;

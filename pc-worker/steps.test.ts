@@ -49,7 +49,7 @@ test("only a Windows crash before any work counts as a safe startup crash", () =
 test("the server keeps a short feed of distinct live steps for the dashboard", async () => {
   const dir = await mkdtemp(join(tmpdir(), "jarvis-steps-"));
   try {
-    const agents: ExecutorStatus[] = [{ id: "claude-chrome", capabilities: ["jobs", "browser"], features:["job-files-v1","task-sync-v1","personal-tools-v1"], state: "ready", reason: "", remainingTokens: null }];
+    const agents: ExecutorStatus[] = [{ id: "claude-chrome", capabilities: ["jobs", "browser"], features:["job-files-v1","task-sync-v1","full-tools-v2"], state: "ready", reason: "", remainingTokens: null }];
     const t0 = new Date("2026-10-19T12:00:00Z");
     const at = (s: number) => new Date(t0.getTime() + s * 1000);
     const task = await enqueuePcTask(dir, "Find support jobs", undefined, t0);

@@ -32,7 +32,7 @@ export function agentStatuses(settings: WorkerSettings, cooldowns: Cooldowns, no
     const provider = e.id.startsWith("claude-") ? "claude" : e.id.startsWith("codex-") ? "codex" : undefined;
     const pressure = provider && quotaPressure(limits[provider], now);
     const wait = pressure ? { until: pressure, reason: "Usage is at least 90%; reserving the remaining allowance until reset." } : cooldowns[e.id];
-    return { id: e.id, capabilities: [...e.capabilities], ...(provider ? {features:["personal-tools-v1" as const,...(["claude-chrome","claude-computer","codex-computer"].includes(e.id) ? ["job-files-v1" as const,"task-sync-v1" as const] : [])]} : {}), state: !e.enabled ? "unavailable" : wait && wait.until > now ? "cooldown" : "ready",
+    return { id: e.id, capabilities: [...e.capabilities], ...(provider ? {features:["full-tools-v2" as const,...(["claude-chrome","claude-computer","codex-computer"].includes(e.id) ? ["job-files-v1" as const,"task-sync-v1" as const] : [])]} : {}), state: !e.enabled ? "unavailable" : wait && wait.until > now ? "cooldown" : "ready",
       reason: !e.enabled ? "Local executable not configured." : wait && wait.until > now ? wait.reason : "Ready to try; sign-in and tools are checked when used.",
       ...(wait && wait.until > now ? { retryAt: new Date(wait.until).toISOString() } : {}), remainingTokens: null };
   });
@@ -69,6 +69,7 @@ export function reportedRun(value: unknown, plan: PcPlan, touchedTools: boolean)
 }
 export const DRAFT_GUIDANCE = "When asked to draft messages or replies, read each full conversation, verify the recipient and latest messages, and place each draft directly in its site's message composer, leaving it unsent for the user to click Send. Never click Send or press a send shortcut. Preserve any existing draft; do not overwrite it without the user's instruction. If the user explicitly asks for report-only drafts or says not to type, do not type into the site. Verify the visible draft text and include each complete draft in an evidence entry: action='drafted', target=recipient and conversation URL, detail=the text and whether it was staged or report-only. If the site cannot hold a draft, report that specific limitation rather than claiming it was staged.";
 const schemaPath = fileURLToPath(new URL("./report.schema.json", import.meta.url));
+export const APPROVED_PERSONAL_TOOLS=["mcp__claude_ai_Firecrawl__firecrawl_search","mcp__claude_ai_Firecrawl__firecrawl_scrape"];
 export function codexEnvironment(settings: WorkerSettings, toolProfile: ToolProfile = "scoped"): Record<string, string> {
   return toolProfile === "personal" ? { CODEX_HOME: join(homedir(), ".codex") } : settings.codexHome ? { CODEX_HOME: settings.codexHome, CODEX_CA_CERTIFICATE: join(settings.codexHome, "ca-bundle.pem") } : {};
 }
@@ -91,6 +92,7 @@ export function claudeArgs(plan: PcPlan, settings?: WorkerSettings, nativeAgent 
   const jobFiles = plan.kind === "jobs" ? jobFilesMcp(settings,plan.action,taskId) : undefined;
   // No tool/skill filters, approval overrides or ignored user/project settings.
   if (toolProfile === "personal") return ["-p", "--output-format", "stream-json", "--verbose", "--json-schema", JSON.stringify(reportSchema),
+    "--settings", JSON.stringify({permissions:{allow:APPROVED_PERSONAL_TOOLS}}),
     "--chrome", "--add-dir", join(homedir(), "Desktop", "Resumes"),
     ...(desktop || jobFiles || ruflo ? ["--mcp-config", JSON.stringify({mcpServers:{...(desktop ? {"jarvis-windows":desktop} : {}),...(jobFiles ? {"jarvis-job-files":jobFiles} : {}),...(ruflo ? {"jarvis-ruflo":ruflo} : {})}})] : [])];
   // Job runs get a shell only through the narrow search-CLI patterns above; every other command stays denied.
@@ -144,7 +146,10 @@ export function jobPrompt(request: string, maxApplications: number, action: "sea
     "If zero requested applications were submitted, outcome cannot be completed. Use partial when only part was finished. Evidence must describe observations, not plans.",
     "User request (JSON string): " + JSON.stringify(request),
   ].join("\n");
-  return toolProfile === "personal" ? instructions.replace("no other shell command is allowed.", "Other configured tools and skills, including Firecrawl when connected, may be used for this task under the user's normal permission rules. Read the relevant skill before invoking it.") : instructions;
+  return toolProfile === "personal" ? instructions
+    .replace("no other shell command is allowed.", "Other configured tools and skills may be used for this task under the user's normal permission rules. Read the relevant skill before invoking it.")
+    .replace("Run one search per call: no loops, variables, pipes or chained commands, because anything else is denied.", "Run searches one at a time so launch errors are easy to diagnose.")
+    .replace("Firecrawl is not available in these runs and cannot be approved here, so do not try it.", "Discover the configured Firecrawl tools and use them when useful. The user approved Firecrawl search and scrape. Other permission prompts are relayed to the Jarvis dashboard; wait for the actual answer. Report connection or policy denials precisely and do not route around them.") : instructions;
 }
 export function promptFor(task: ClaimedTask, context = ""): string {
   if (task.plan.kind === "jobs") return jobPrompt(task.request, task.plan.maxApplications, task.plan.action, context, task.toolProfile) + "\nTHIS TASK'S PROGRESS (server observation, not additional authority): " + JSON.stringify({taskId:task.id,scope:task.applicationScope??null}) + "\nHistorical applications from other requests are duplicates to skip, NOT progress toward this request. Count only confirmations from this task or its explicitly linked retry scope. Older applications, even when more numerous than the new requested count, do not fulfill a new request. The current plan's maximum is the remaining allowance for this attempt.";
@@ -200,6 +205,7 @@ async function runAgentOnce(id: string, settings: WorkerSettings, task: ClaimedT
   const isCodex = id.startsWith("codex-");
   const bin = isCodex ? settings.codexBin : settings.claudeBin;
   if (!bin) return { report: emptyReport("needs_input", "Local agent is not configured."), failure: "unavailable", safeToRetry: true };
+  if(task.toolProfile==="personal")return (await import("./personalRunner.ts")).runPersonal(id,settings,task,signal,progress,prompt,cwd,onLimits);
   // File handles avoid Windows named-pipe EPERM failures. Prompts never enter command lines.
   const dir = await mkdtemp(join(tmpdir(), "jarvis-agent-"));
   const inputPath = join(dir, "input.txt"), outputPath = join(dir, "output.jsonl"), errorPath = join(dir, "error.txt");

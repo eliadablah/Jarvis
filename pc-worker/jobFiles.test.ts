@@ -18,7 +18,7 @@ test("personal runs inherit installed tools/settings without overriding approval
  assert.match(codex.join(" "),/jarvis-job-files.required=true/);
  assert.equal(codexEnvironment(s,"personal").CODEX_HOME,join(homedir(),".codex"));
  assert.equal(codexEnvironment(s).CODEX_HOME,s.codexHome);
- assert.match(jobPrompt("Apply to 4 jobs",4,"submit","","personal"),/Firecrawl when connected/);
+ assert.match(jobPrompt("Apply to 4 jobs",4,"submit","","personal"),/user approved Firecrawl search and scrape/);
  assert.doesNotMatch(jobPrompt("Apply to 4 jobs",4,"submit","","personal"),/no other shell command is allowed/);
  assert.match(jobPrompt("Apply to 4 jobs",4,"submit"),/no other shell command is allowed/);
 });
