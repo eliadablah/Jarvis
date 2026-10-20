@@ -14,12 +14,13 @@ import { appHeaders } from "./http/securityHeaders.ts";
 
 import { handleDashboard } from './dashboard.ts';
 import { handlePcTasks } from "./pcTasks/api.ts";
-import { handleJobs } from "./jobs/api.ts";
+import { handleJobs, startTrackerUpdates } from "./jobs/api.ts";
 import { handleSchedules } from "./schedules/api.ts";
 import { startScheduler } from "./schedules/morning.ts";
 import {handleLive,closeLiveClients} from "./live.ts";
 
 const config = loadConfig();
+let stopTrackerUpdates = () => {};
 
 const server = createServer((req, res) => {
   const path = new URL(req.url ?? "/", "http://localhost").pathname;
@@ -79,6 +80,7 @@ server.listen(config.port, () => {
   console.log(`jarvis-web listening on :${config.port} (env=${config.env}, version=${config.version})`);
   // Queues the daily morning job run when it is due (needs the PC worker token).
   startScheduler(config);
+  stopTrackerUpdates = startTrackerUpdates(config);
 });
 
 // --- Graceful shutdown: finish in-flight requests, then exit ---
@@ -86,6 +88,7 @@ for (const signal of ["SIGTERM", "SIGINT"] as const) {
   process.on(signal, () => {
     console.log(`jarvis-web received ${signal}, shutting down`);
     closeLiveClients();
+    stopTrackerUpdates();
     server.close(() => process.exit(0));
   });
 }

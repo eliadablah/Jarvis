@@ -7,7 +7,8 @@ import {randomUUID} from "node:crypto";
 import {createServer} from "node:http";
 import {recordSubmission,readSubmissions} from "../src/jobs/submissions.ts";
 import {enqueuePcTask,claimNextPcTask,finishPcTask,retryPcTask} from "../src/pcTasks/store.ts";
-import {mergeSubmissionView} from "../src/jobs/api.ts";
+import {trackerView} from "../src/jobs/api.ts";
+import {trackerChangeCheck} from "../src/jobs/watch.ts";
 import {summarize} from "../src/jobs/tracker.ts";
 import {handlePcTasks} from "../src/pcTasks/api.ts";
 import {loadConfig} from "../src/config.ts";
@@ -41,12 +42,26 @@ test("receipt endpoint checks owner/lease, persists once and enforces the task c
   assert.equal((await send(claim!.lease!,receipt(2))).status,400);assert.equal((await readSubmissions(dir)).length,1);
  }finally{server.closeAllConnections();await new Promise<void>(r=>server.close(()=>r()));if(prior===undefined)delete process.env.JARVIS_DATA_DIR;else process.env.JARVIS_DATA_DIR=prior;await rm(dir,{recursive:true,force:true});}
 });
-test("dashboard overlays pending receipts without double-counting a tracker row",()=>{
+test("Google counts remain authoritative while pending receipts are shown separately",()=>{
  const old={company:"Example 1",role:"Support",url:receipt(1).url,stage:"Needs answer",applied:"2026-10-19",updated:"2026-10-19",nextStep:"",pay:"",location:"",via:""};
  const base={summary:summarize([old]),jobs:[old],updatedAt:new Date().toISOString()};
  const record={...receipt(1),id:"test",taskId:"test",at:new Date().toISOString(),sync:"pending" as const};
- const view=mergeSubmissionView(base,[record,record]);
- assert.equal(view.summary.total,1);assert.equal(view.summary.submitted,1);assert.equal(view.summary.needsYou,0);assert.equal(view.jobs[0]!.nextStep,"Google sync pending");
+ const view=trackerView(base,[record]);
+ assert.deepEqual(view.summary,base.summary);assert.deepEqual(view.jobs,base.jobs);
+ assert.equal(view.pendingGoogleSync,1);assert.equal(view.pendingApplications[0]!.company,record.company);
+ assert.equal(JSON.stringify(view).includes(record.confirmation),false);
+ const offline=trackerView(undefined,[record]);assert.equal(offline.summary,undefined);assert.equal(offline.trackerUnavailable,true);
+});
+test("external sheet edits, outages and recovery publish changes but timestamps alone do not",async()=>{
+ let snapshot={summary:summarize([]),jobs:[],updatedAt:new Date().toISOString(),stale:false};
+ let events=0,fail=false;
+ const poll=trackerChangeCheck(async()=>{if(fail)throw Error("offline");return snapshot;},()=>events++);
+ await poll();assert.equal(events,1);
+ snapshot={...snapshot,updatedAt:"2026-10-20T00:00:00Z"};await poll();assert.equal(events,1);
+ snapshot={...snapshot,summary:{...snapshot.summary,submitted:1,total:1}};await poll();assert.equal(events,2);
+ snapshot={...snapshot,stale:true};await poll();assert.equal(events,3);
+ fail=true;await poll();await poll();assert.equal(events,4);
+ fail=false;snapshot={...snapshot,stale:false};await poll();assert.equal(events,5);
 });
 test("live connection receives a pushed update without waiting for a poll",async()=>{
  const server=createServer(handleLive);const controller=new AbortController();

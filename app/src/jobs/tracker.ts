@@ -39,9 +39,8 @@ export interface TrackerSnapshot { summary: TrackerSummary; jobs: TrackerJob[]; 
 
 const SCOPE = "https://www.googleapis.com/auth/spreadsheets.readonly";
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
-const CACHE_MS = 60_000;
+const CACHE_MS = 3_000;
 const STALE_MS = 10 * 60_000;
-const MAX_JOBS = 60;
 
 const HEADERS = ["Date Applied", "Company", "Role", "Pay", "Location", "Stage", "Next Step / Needs You",
   "Last Update", "CV Used", "Apply Via", "Posting URL", "Notes"];
@@ -123,6 +122,9 @@ type Fetch = typeof fetch;
 export class TrackerReader {
   private token?: { value: string; until: number };
   private cache?: { at: number; snapshot: TrackerSnapshot };
+  private inFlight?: Promise<TrackerSnapshot>;
+  private retryAfter = 0;
+  private lastError?: Error;
   private readonly config: TrackerConfig;
   private readonly doFetch: Fetch;
   private readonly now: () => number;
@@ -159,17 +161,31 @@ export class TrackerReader {
     if (!res.ok) throw new Error("Google Sheets returned HTTP " + res.status + ".");
     const body = await res.json() as { values?: unknown[][] };
     const jobs = parseRows(body.values ?? []);
-    return { summary: summarize(jobs, new Date(this.now())), jobs: sortJobs(jobs).slice(0, MAX_JOBS), updatedAt: new Date(this.now()).toISOString() };
+    return { summary: summarize(jobs, new Date(this.now())), jobs: sortJobs(jobs), updatedAt: new Date(this.now()).toISOString() };
   }
 
-  /** Cached for a minute; falls back to the last good copy for ten minutes if Google fails. */
-  async snapshot(fresh = false): Promise<TrackerSnapshot> {
-    if (!fresh && this.cache && this.now() - this.cache.at < CACHE_MS) return this.cache.snapshot;
+  /** Shared three-second read cache. Concurrent viewers never multiply Google requests. */
+  async snapshot(_fresh = false): Promise<TrackerSnapshot> {
+    if (this.cache && this.now() - this.cache.at < CACHE_MS) return this.cache.snapshot;
+    if (this.inFlight) return this.inFlight;
+    if (this.now() < this.retryAfter) {
+      if (this.cache && this.now() - this.cache.at < STALE_MS) return { ...this.cache.snapshot, stale: true };
+      throw this.lastError ?? Error("Google tracker is temporarily unavailable.");
+    }
+    this.inFlight = this.refresh();
+    try { return await this.inFlight; } finally { this.inFlight = undefined; }
+  }
+
+  private async refresh(): Promise<TrackerSnapshot> {
     try {
       const snapshot = await this.fetchSnapshot();
       this.cache = { at: this.now(), snapshot };
+      this.retryAfter = 0;
+      this.lastError = undefined;
       return snapshot;
     } catch (error) {
+      this.retryAfter = this.now() + 30_000;
+      this.lastError = error instanceof Error ? error : Error("Google tracker read failed.");
       if (this.cache && this.now() - this.cache.at < STALE_MS) return { ...this.cache.snapshot, stale: true };
       throw error;
     }

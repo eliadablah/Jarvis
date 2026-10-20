@@ -62,8 +62,14 @@ test("reader signs in once, caches, and serves a stale copy if Google fails", as
   assert.equal(first.summary.total, 4);
   await reader.snapshot();
   assert.equal(sheetCalls, 1);
+  time += 3_001;
+  await Promise.all([reader.snapshot(true), reader.snapshot(true), reader.snapshot()]);
+  assert.equal(sheetCalls, 2, "multiple viewers share one Google read");
   time += 61_000; failSheets = true;
   assert.equal((await reader.snapshot()).stale, true);
+  const beforeRetry=sheetCalls;
+  await reader.snapshot(true);
+  assert.equal(sheetCalls,beforeRetry,"outages back off instead of flooding Google");
   assert.equal(tokenCalls, 1);
   time += 11 * 60_000;
   await assert.rejects(reader.snapshot(), /HTTP 500/);

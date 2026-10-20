@@ -2,12 +2,12 @@
 // Google Sheets tracker through GET /api/jobs.
 //
 // Fills the numbers in the existing "pipeline" strip, adds a list of recent
-// applications under it, and refreshes every two minutes and whenever the tab
+// applications under it, with pushed changes and a periodic fallback when the tab
 // becomes visible again. Everything from the sheet is inserted with
 // textContent, never as HTML. If the tracker isn't connected the card keeps
 // its original "Tracker not connected" text.
 
-const REFRESH_MS = 30_000;
+const REFRESH_MS = 5_000;
 const PREVIEW_ROWS = 6;
 
 const STAGE_CLASS = {
@@ -61,25 +61,28 @@ export function startJobsPanel() {
   function render() {
     list.replaceChildren();
     if (!data?.enabled) return;
-    if (data.error && !data.jobs) {
-      list.append(el('p', 'job-note', data.error));
-      return;
-    }
     const s = data.summary;
-    pipeline.replaceChildren(step(s.submitted, 'Applied'), step(s.needsYou, 'Need you'), step(s.responses, 'Responses'), step(s.last7Days, 'Last 7 days'));
-    if (tag) tag.textContent = data.pendingGoogleSync ? data.pendingGoogleSync + ' Google sync pending' : 'Live from your tracker';
+    if (s) pipeline.replaceChildren(step(s.submitted, 'Applied'), step(s.needsYou, 'Need you'), step(s.responses, 'Responses'), step(s.last7Days, 'Last 7 days'));
+    else pipeline.replaceChildren(step('—', 'Applied'), step('—', 'Need you'), step('—', 'Responses'), step('—', 'Last 7 days'));
+    if (tag) tag.textContent = data.trackerUnavailable ? 'Tracker unavailable' : data.stale ? 'Saved tracker copy' : 'Live from your tracker';
+    if (data.error) list.append(el('p', 'job-note', data.error));
+    if (data.pendingGoogleSync) {
+      list.append(el('p', 'job-note', `${data.pendingGoogleSync} awaiting Google sync · not included in counts`));
+      for (const pending of data.pendingApplications ?? []) list.append(el('p', 'job-note', `${pending.company} · ${pending.role} · Google sync pending`));
+    }
 
     const head = el('div', 'job-list-head');
     const updated = new Date(data.updatedAt);
-    head.append(el('small', '', `${s.total} tracked · ${s.today} today${data.stale ? ' · showing saved copy' : ''} · updated ${updated.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit',hour12:true })}`));
+    if (s) head.append(el('small', '', `${s.total} tracked · ${s.today} today${data.stale ? ' · showing saved copy' : ''} · checked ${updated.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit',hour12:true })}`));
     if (data.sheetUrl) {
       const open = el('a', 'job-sheet-link', 'Open tracker ↗');
       open.href = data.sheetUrl; open.target = '_blank'; open.rel = 'noopener noreferrer';
       head.append(open);
     }
     list.append(head);
-    (expanded ? data.jobs : data.jobs.slice(0, PREVIEW_ROWS)).forEach(job => list.append(row(job)));
-    if (data.jobs.length > PREVIEW_ROWS) {
+    const jobs = data.jobs ?? [];
+    (expanded ? jobs : jobs.slice(0, PREVIEW_ROWS)).forEach(job => list.append(row(job)));
+    if (jobs.length > PREVIEW_ROWS) {
       const toggle = el('button', 'text-btn job-toggle', expanded ? 'Show fewer' : `Show all ${data.jobs.length}`);
       toggle.type = 'button';
       toggle.onclick = () => { expanded = !expanded; render(); };
@@ -92,10 +95,10 @@ export function startJobsPanel() {
     if(refreshing){refreshAgain ||= fresh;return;}refreshing=true;
     try {
       const res = await fetch('/api/jobs' + (fresh ? '?fresh=1' : ''), { cache: 'no-store' });
-      if (!res.ok) return;
+      if (!res.ok) throw new Error('Tracker request failed');
       data = await res.json();
       render();
-    } catch { /* offline: keep what is showing */ } finally {refreshing=false;if(refreshAgain){refreshAgain=false;void refresh(true);}}
+    } catch { if (tag) tag.textContent = 'Connection lost · retrying'; } finally {refreshing=false;if(refreshAgain){refreshAgain=false;void refresh(true);}}
   }
 
   document.addEventListener("jarvis:jobs-updated",()=>{void refresh(true);});

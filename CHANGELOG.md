@@ -2,6 +2,12 @@
 
 ## 2026-10-19
 
+### Fix - Google tracker as the live dashboard source of truth
+
+- Google rows and totals are authoritative. Pending local confirmations appear separately and never inflate the Google counts. An outage shows saved/unknown state rather than false live totals.
+- Read-only Google checks run every three seconds and push changed rows/counts to open dashboards. Concurrent requests share one read; failures back off for 30 seconds and recover automatically. The browser has a five-second fallback and refreshes on reconnect/focus. No AI tokens are consumed by sync checks.
+- Validation: 117 app tests, TypeScript checks and all build stages passed. Coverage includes external changes, outage/recovery notifications, authoritative counts, concurrent readers and retry backoff. Google writes and new shared AI tracker access remain disabled after automatic review requested more explicit approval.
+
 ### Fix - Task-scoped application counts and pushed dashboard updates
 
 - Fixed the retry confusing five October 18 applications with a new four-job request. Task claims now include only their original request/retry-family confirmations and budget. Unrelated history is a duplicate check, not task completion. Retry caps also include durable receipts from the same attempt.
