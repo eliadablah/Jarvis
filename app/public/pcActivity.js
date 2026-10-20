@@ -1,9 +1,43 @@
 // PC activity is shared by all three dashboard views.
 import { renderLimits } from './limits.js';
+export function approvalPresentation(approval) {
+  let input={}; try { const parsed=JSON.parse(approval.details);if(parsed&&typeof parsed==='object'&&!Array.isArray(parsed))input=parsed; } catch {}
+  const meta=input?._meta||{},params=meta.tool_params||input||{};
+  const tool=/run tool "([^"]+)"/.exec(input.message||'')?.[1]||approval.tool;
+  const titles={shared_job_state:'Read your live Google job tracker',read_pdf:'Read your resume',read_text:'Read your job files',append_application_log:'Record a confirmed application',tabs_context_mcp:'Check your browser tabs',tabs_create_mcp:'Open a browser tab',file_upload:'Upload the selected file',read_page:'Read the current web page',get_page_text:'Read the current web page',find:'Find a control on the page',form_input:'Fill a form field',navigate:'Open the requested web page',computer:'Use the browser controls',Bash:'Run a command',Write:'Save a file',Edit:'Edit a file'};
+  const descriptions={shared_job_state:'Checks where you have already applied to avoid duplicates.',read_pdf:'Reads the selected resume so Jarvis can use your real qualifications.',read_text:'Reads your existing job instructions or application history.',tabs_context_mcp:'Checks which browser tabs are available for this task.',navigate:'Opens the web address shown below.'};
+  const questions=Array.isArray(input.questions)?input.questions:[];
+  const schema=input.requestedSchema,properties=schema?.properties;
+  let kind='permission',fields=[];
+  if(questions.length){kind='questions';fields=questions.map(q=>({key:q.id||q.question,label:q.question||q.header||'Your answer',required:true,type:'string'}));}
+  else if(input.mode==='form'){
+    if(schema?.type==='object'&&properties&&typeof properties==='object'&&!Array.isArray(properties)){
+      kind=Object.keys(properties).length?'form':'permission';
+      fields=Object.entries(properties).map(([key,p])=>({key,label:p.title||key,description:p.description||'',required:(schema.required||[]).includes(key),type:p.type||'string',options:p.enum}));
+    }else{kind='json';fields=[{key:'answer',label:input.message||'Your answer',required:true,type:'object'}];}
+  }
+  const target=['path','url','company','role'].filter(key=>typeof params[key]==='string').map(key=>params[key]).join(' · ')||input.url||'';
+  return {kind,fields,title:titles[tool]||(kind==='permission'?'Allow Jarvis to '+(tool==='MCP user input'?'use this connected tool':tool)+'?':'Jarvis needs your answer'),description:descriptions[tool]||input.message||input.reason||input.description||meta.tool_description||'Review this action before Jarvis continues.',target};
+}
+export function approvalAnswer(presentation,values) {
+  if(presentation.kind==='permission')return undefined;
+  const answers={};
+  presentation.fields.forEach((field,index)=>{
+    const value=(values[index]||'').trim();
+    if(!value){if(field.required)throw Error('Please answer: '+field.label);return;}
+    if(presentation.kind==='questions'){answers[field.key]=value;return;}
+    if(field.type==='boolean'){if(!['true','false'].includes(value))throw Error('Choose Yes or No.');answers[field.key]=value==='true';}
+    else if(['number','integer'].includes(field.type)){const number=Number(value);if(!Number.isFinite(number)||field.type==='integer'&&!Number.isInteger(number))throw Error('Enter a valid number for '+field.label);answers[field.key]=number;}
+    else if(['object','array'].includes(field.type)){try{answers[field.key]=JSON.parse(value);}catch{throw Error('Enter valid JSON for '+field.label);}}
+    else answers[field.key]=value;
+  });
+  return presentation.kind==='questions'&&presentation.fields.length===1?answers[presentation.fields[0].key]:presentation.kind==='json'?JSON.stringify(answers.answer):JSON.stringify(answers);
+}
 export function failureMessage(task) {
   if (!['needs_input','failed','partial','needs_attention','cancelled'].includes(task.status)) return '';
   const needs = task.report?.needsInput || [];
   const evidence = task.report?.evidence || [];
+  if(['needs_input','failed','partial'].includes(task.status)&&task.approvals?.length&&task.approvals.every(a=>a.decision==='allow')&&evidence.some(e=>/user rejected MCP tool call/i.test(e.detail||'')))return 'Jarvis saved your Allow clicks, but the agent still received a rejection. '+(task.report?.submitted===0?'No applications were submitted. ':'')+'The approval reply format has been corrected; use Try again to resume the remaining work.';
   const reason = needs.find(s=>!/^No (?:new submissions|applications were confirmed)/i.test(s)) || evidence.find(e => /denied|blocked|attempted_read|error/i.test(e.action))?.detail || task.report?.summary || task.result || task.progress;
   return reason || 'The agent stopped without a specific reason. Review Details before trying again.';
 }
@@ -38,11 +72,20 @@ export function mountPcActivity({ api, safe, modal, toast, navigate }) {
   const fmt = ms => { const s = Math.max(0, Math.round(ms / 1000)); return s < 60 ? s + 's' : Math.floor(s / 60) + 'm ' + String(s % 60).padStart(2, '0') + 's'; };
   const since = iso => iso ? fmt(Date.now() - Date.parse(iso)) : '';
   function approvalBlock(task) {
-    return (task.approvals || []).filter(a=>!a.decision&&Date.parse(a.expiresAt)>Date.now()&&task.status==='running').map(a=>
-      '<div class="pc-failure"><strong>Jarvis needs your approval</strong><p>'+safe(a.provider+' · '+a.tool)+'</p><pre style="white-space:pre-wrap;max-height:260px;overflow:auto">'+safe(a.details)+'</pre><label>Answer, if Jarvis asked a question<input data-approval-answer="'+safe(a.id)+'" maxlength="4000" autocomplete="off"></label><div class="pc-task-actions"><button class="text-btn" data-approval="'+safe(a.id)+'" data-task="'+safe(task.id)+'" data-choice="allow">Allow once / Continue</button><button class="text-btn" data-approval="'+safe(a.id)+'" data-task="'+safe(task.id)+'" data-choice="deny">Deny</button></div></div>').join('');
+    return (task.approvals || []).filter(a=>!a.decision&&Date.parse(a.expiresAt)>Date.now()&&task.status==='running').map(a=>{
+      const view=approvalPresentation(a);
+      const fields=view.fields.map((field,index)=>{
+        const attrs=' data-approval-answer="'+safe(a.id+':'+index)+'" data-approval-id="'+safe(a.id)+'"';
+        const options=field.type==='boolean'?['true','false']:field.options;
+        const control=Array.isArray(options)?'<select'+attrs+'><option value="">Choose an answer</option>'+options.map(option=>'<option value="'+safe(String(option))+'">'+safe(field.type==='boolean'?(option==='true'?'Yes':'No'):String(option))+'</option>').join('')+'</select>':'<textarea'+attrs+' rows="2" maxlength="4000" placeholder="'+safe(['object','array'].includes(field.type)?'Enter the requested JSON':'Type your answer')+'" autocomplete="off"></textarea>';
+        return '<label>'+safe(field.label)+(field.required?'':' (optional)')+(field.description?'<small>'+safe(field.description)+'</small>':'')+control+'</label>';
+      }).join('');
+      return '<section class="pc-approval" aria-label="Permission request"><div class="pc-approval-heading"><span class="tag">Waiting for you</span><small>'+safe(a.provider==='codex'?'Codex':'Claude')+'</small></div><h4>'+safe(view.title)+'</h4><p>'+safe(view.description)+'</p>'+(view.target?'<p class="pc-approval-target">'+safe(view.target)+'</p>':'')+fields+'<p class="pc-approval-help">'+(view.kind==='permission'?'No typing needed. Allow only approves this action.':'Your answer will be sent to the waiting task. Do not enter passwords or sign-in codes.')+'</p><div class="pc-task-actions"><button class="pc-approval-allow" data-approval="'+safe(a.id)+'" data-task="'+safe(task.id)+'" data-choice="allow">'+(view.kind==='permission'?'Allow this action':'Send answer & continue')+'</button><button class="text-btn" data-approval="'+safe(a.id)+'" data-task="'+safe(task.id)+'" data-choice="deny">Don’t allow</button></div><details><summary>Technical details</summary><pre>'+safe(a.details)+'</pre></details></section>';
+    }).join('');
   }
   function liveBlock(task) {
     if (!['running', 'cancelling'].includes(task.status)) return '';
+    if(task.status==='running'&&(task.approvals||[]).some(a=>!a.decision&&Date.parse(a.expiresAt)>Date.now()))return '<p class="pc-paused">Task paused. Choose an answer above to continue.</p>';
     const beat = Date.parse(task.heartbeatAt || task.startedAt || task.createdAt);
     const quiet = Date.now() - beat > 60000;
     const feed = (task.activity || []).slice(-6, -1).reverse().map(a => '<li><span>' + safe(a.text.slice(0, 110)) + '</span><small data-pc-ago="' + safe(a.at) + '"></small></li>').join('');
@@ -61,7 +104,7 @@ export function mountPcActivity({ api, safe, modal, toast, navigate }) {
       const next = await api('/api/pc/tasks');
       for (const task of next.tasks) {
         for(const approval of task.approvals||[])if(!approval.decision&&Date.parse(approval.expiresAt)>Date.now()&&!seenApprovals.has(approval.id)){
-          seenApprovals.add(approval.id);if(!firstLoad)toast('Jarvis needs your approval: '+approval.tool+'. Open PC activity.');
+          seenApprovals.add(approval.id);if(!firstLoad)toast('Jarvis is waiting: '+approvalPresentation(approval).title+'. Open PC activity.');
         }
         if (!firstLoad && observed.has(task.id) && observed.get(task.id) !== task.status && ['completed','partial','needs_input','needs_attention','failed','cancelled'].includes(task.status))
           toast('PC task: ' + labels[task.status] + '. ' + (failureMessage(task) || 'Open PC activity for the report.').slice(0,240));
@@ -89,7 +132,7 @@ export function mountPcActivity({ api, safe, modal, toast, navigate }) {
         list.querySelectorAll('[data-approval-answer]').forEach(n=>approvalAnswers.set(n.dataset.approvalAnswer,n.value));
         list.innerHTML = html; renderedHtml=html;
         list.querySelectorAll('[data-approval-answer]').forEach(n=>{n.value=approvalAnswers.get(n.dataset.approvalAnswer)||'';});ticker();
-        if(answerId){const input=list.querySelector('[data-approval-answer="'+answerId+'"]');if(input){input.focus({preventScroll:true});if(selection)input.setSelectionRange(...selection);}}
+        if(answerId){const input=list.querySelector('[data-approval-answer="'+answerId+'"]');if(input){input.focus({preventScroll:true});if(selection&&typeof selection[0]==='number'&&typeof input.setSelectionRange==='function')input.setSelectionRange(...selection);}}
       }
     } catch {
       document.querySelector('#pc-connection').textContent = 'Connection unavailable';
@@ -101,7 +144,10 @@ export function mountPcActivity({ api, safe, modal, toast, navigate }) {
     if(approvalButton){
       const task=state.tasks.find(t=>t.id===approvalButton.dataset.task),approval=task?.approvals?.find(a=>a.id===approvalButton.dataset.approval);
       if(!approval?.decisionToken)return;
-      const answer=card.querySelector('[data-approval-answer="'+approval.id+'"]')?.value;
+      let answer;
+      if(approvalButton.dataset.choice==='allow'){
+        try{answer=approvalAnswer(approvalPresentation(approval),[...card.querySelectorAll('[data-approval-id="'+approval.id+'"]')].map(n=>n.value));}catch(e){toast(e.message);return;}
+      }
       approvalButton.disabled=true;
       try{await api('/api/pc/tasks/'+task.id+'/approvals/'+approval.id+'/decision','POST',{decision:approvalButton.dataset.choice,decisionToken:approval.decisionToken,...(answer?{answer}: {})});toast(approvalButton.dataset.choice==='allow'?'Approved this action. Jarvis will continue.':'Denied. Jarvis will receive your answer.');await refresh();}catch(e){toast(e.message);approvalButton.disabled=false;}return;
     }

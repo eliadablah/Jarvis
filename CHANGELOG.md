@@ -2,6 +2,12 @@
 
 ## 2026-10-20
 
+### Fix - Allow clicks on empty MCP approval forms
+
+- Real Codex tool approvals use an empty object form. Jarvis previously required text even after Allow, then returned decline and misreported the tool as user-rejected. Empty forms now return an accepted empty object only after an actual Allow decision. The server also encodes that response for already-running workers; no restart or blanket permission grant is required for this fix.
+- Approval cards show a plain action, relevant file/link, Allow this action and Don't allow. Permission-only requests have no answer box. Actual questions and connector forms show labeled fields in the dashboard theme; technical payloads are collapsed. Waiting tasks show they are paused, and historical Allow/rejection mismatches explain the error.
+- Regression checks use the observed empty-schema MCP request through HTTP/session/lease approval and provider response handling, and preserve Deny, expiry, cancellation and required-question behavior.
+
 ### Feature - Personal Claude Code/Codex tools and dashboard approval relay
 
 - Direct PC requests inherit the user's installed tools, plugins, skills and settings. The Claude Agent SDK and Codex app-server relay approval and input requests to PC activity, pause, then resume the same turn after an actual Allow once / Deny answer. Browser sessions and action tokens bind each response to the current worker/task lease. Expiry, cancellation and unknown requests fail closed. New personal tasks wait for full-tools-v2; scheduled and legacy profiles remain scoped.

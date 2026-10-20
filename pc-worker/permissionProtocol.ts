@@ -1,8 +1,10 @@
+import {emptyApprovalForm} from "../app/src/pcTasks/approvalInput.ts";
 export type AskPermission=(tool:string,input:unknown)=>Promise<{allow:boolean;answer?:string}>;
 export async function elicitationPermission(params:Record<string,any>,ask:AskPermission){
  const result=await ask("MCP user input",params);
  if(!result.allow)return {action:"decline"};
  if(params.mode==="url")return {action:"accept"};
+ if(emptyApprovalForm(params))return {action:"accept",content:{}};
  if(!result.answer?.trim())return {action:"decline"};
  try{const content=JSON.parse(result.answer);return content&&typeof content==="object"&&!Array.isArray(content)?{action:"accept",content}:{action:"decline"};}catch{return {action:"decline"};}
 }

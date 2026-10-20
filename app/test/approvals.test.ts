@@ -10,6 +10,9 @@ import {enqueuePcTask,claimNextPcTask,cancelPcTask} from "../src/pcTasks/store.t
 import {approvalTokens,verifyApprovalToken} from "../src/pcTasks/approvalAuth.ts";
 import type {IncomingMessage,ServerResponse} from "node:http";
 import {handlePcTasks} from "../src/pcTasks/api.ts";
+import {emptyApprovalForm,approvalWireAnswer} from "../src/pcTasks/approvalInput.ts";
+// @ts-ignore Browser presentation is exercised without a DOM.
+import {approvalPresentation,approvalAnswer} from "../public/pcActivity.js";
 test("approvals require the worker lease to request and a browser session plus action token to decide",async()=>{
  const dir=await mkdtemp(join(tmpdir(),"jarvis-approval-")),previous=process.env.JARVIS_DATA_DIR;process.env.JARVIS_DATA_DIR=dir;
  const config=loadConfig({PC_WORKER_TOKEN:"worker-secret"}),worker=randomUUID();
@@ -18,7 +21,7 @@ test("approvals require the worker lease to request and a browser session plus a
   const task=await enqueuePcTask(dir,"Find support jobs");
   const claim=await claimNextPcTask(dir,worker,[{id:"claude-chrome",state:"ready",reason:"ready",remainingTokens:null,capabilities:["jobs"],features:["full-tools-v2","task-sync-v1"]}]);assert.ok(claim);
   await new Promise<void>(resolve=>server.listen(0,"127.0.0.1",resolve));const addr=server.address();assert.ok(addr&&typeof addr==="object");const base="http://127.0.0.1:"+addr.port;
-  const request={id:randomUUID(),provider:"claude",tool:"Bash",details:'{"command":"show public documentation"}',fingerprint:"a".repeat(64),decision:"allow"};
+  const request={id:randomUUID(),provider:"codex",tool:"MCP user input",details:JSON.stringify({mode:"form",message:'Allow the jarvis-job-files MCP server to run tool "shared_job_state"?',requestedSchema:{type:"object",properties:{}},_meta:{codex_approval_kind:"mcp_tool_call",tool_params:{}}}),fingerprint:"a".repeat(64),decision:"allow"};
   const workerPost=(body:unknown,lease=claim.lease)=>fetch(base+"/api/pc/tasks/"+task.id+"/approval",{method:"POST",headers:{Authorization:"Bearer worker-secret","Content-Type":"application/json"},body:JSON.stringify({protocol:2,workerId:worker,lease,...body as object})});
   assert.equal((await workerPost({request},randomUUID())).status,409);
   const created=await(await workerPost({request})).json();assert.equal(created.approval.decision,undefined,"workers cannot grant their own request");
@@ -35,10 +38,27 @@ test("approvals require the worker lease to request and a browser session plus a
   assert.equal((await decide(body,cookie,"https://other.example")).status,403);
   assert.equal((await decide(body,cookie)).status,200);assert.equal((await decide(body,cookie)).status,200);
   assert.equal((await decide({...body,decision:"deny"},cookie)).status,409,"one decision cannot be reversed");
-  assert.equal((await(await workerPost({approvalId:request.id})).json()).approval.decision,"allow");
+  const reply=(await(await workerPost({approvalId:request.id})).json()).approval;
+  assert.equal(reply.decision,"allow");assert.equal(reply.answer,"{}","already-running workers receive an empty object form after the real Allow decision");
   await cancelPcTask(dir,task.id);
   assert.equal((await workerPost({approvalId:request.id})).status,409,"cancelled tasks cannot collect even a previously granted approval");
  }finally{server.closeAllConnections();await new Promise<void>(resolve=>server.close(()=>resolve()));if(previous===undefined)delete process.env.JARVIS_DATA_DIR;else process.env.JARVIS_DATA_DIR=previous;await rm(dir,{recursive:true,force:true});}
+});
+test("empty MCP forms need only a decision; real questions keep their actual fields",()=>{
+ const form={mode:"form",message:'Allow the jarvis-job-files MCP server to run tool "shared_job_state"?',requestedSchema:{type:"object",properties:{}}};
+ const row={tool:"MCP user input",details:JSON.stringify(form)};
+ assert.equal(emptyApprovalForm(form),true);
+ assert.equal(approvalWireAnswer(row),undefined,"pending is never approved automatically");
+ assert.equal(approvalWireAnswer({...row,decision:"deny"}),undefined);
+ assert.equal(approvalWireAnswer({...row,decision:"allow"}),"{}");
+ assert.equal(emptyApprovalForm({...form,requestedSchema:{type:"object",properties:{},required:["name"]}}),false);
+ assert.equal(emptyApprovalForm({...form,requestedSchema:{type:"object",properties:{},minProperties:1}}),false);
+ const permission=approvalPresentation(row);assert.equal(permission.kind,"permission");assert.equal(permission.fields.length,0);assert.match(permission.title,/Google job tracker/);assert.equal(approvalAnswer(permission,[]),undefined);
+ const question=approvalPresentation({details:JSON.stringify({questions:[{id:"location",question:"Which city?"},{id:"shift",question:"Which shift?"}]})});
+ assert.equal(question.fields[0].label,"Which city?");assert.throws(()=>approvalAnswer(question,["Dallas",""]),/Which shift/);
+ assert.deepEqual(JSON.parse(approvalAnswer(question,["Dallas","Day"])),{location:"Dallas",shift:"Day"});
+ const fields=approvalPresentation({details:JSON.stringify({mode:"form",requestedSchema:{type:"object",properties:{city:{type:"string",title:"Your city"},available:{type:"boolean"}},required:["city","available"]}})});
+ assert.deepEqual(JSON.parse(approvalAnswer(fields,["Dallas","false"])),{city:"Dallas",available:false});
 });
 test("approval capabilities expire and are bound to the original action and worker lease",()=>{
  const now=Date.now(),id=randomUUID(),task={id:randomUUID(),workerId:randomUUID(),lease:randomUUID(),approvals:[{id,fingerprint:"a".repeat(64),expiresAt:new Date(now+60000).toISOString()}]};

@@ -50,6 +50,10 @@ test("questions require actual supplied answers rather than assuming yes",async(
  assert.deepEqual(await codexPermission("item/tool/requestUserInput",{questions:[{id:"location"}]},async()=>({allow:true,answer:"Dallas"})),{answers:{location:{answers:["Dallas"]}}});
 });
 test("connector forms require real input and cancellation never launches a provider",async()=>{
+ const approval={mode:"form",requestedSchema:{type:"object",properties:{}},_meta:{codex_approval_kind:"mcp_tool_call"},message:'Allow shared_job_state?'};
+ assert.deepEqual(await codexPermission("mcpServer/elicitation/request",approval,async()=>({allow:true})),{action:"accept",content:{}});
+ assert.deepEqual(await codexPermission("mcpServer/elicitation/request",approval,async()=>({allow:false})),{action:"decline"});
+ assert.deepEqual(await elicitationPermission({...approval,requestedSchema:{type:"object",properties:{name:{type:"string"}},required:["name"]}},async()=>({allow:true})),{action:"decline"});
  assert.deepEqual(await elicitationPermission({mode:"form"},async()=>({allow:true})),{action:"decline"});
  assert.deepEqual(await elicitationPermission({mode:"form"},async()=>({allow:true,answer:'{"location":"Dallas"}'})),{action:"accept",content:{location:"Dallas"}});
  assert.deepEqual(await codexPermission("mcpServer/elicitation/request",{mode:"url",url:"https://example.com/auth"},async()=>({allow:false})),{action:"decline"});

@@ -1,4 +1,5 @@
 import {readSubmissions} from "../jobs/submissions.ts";
+import {approvalWireAnswer} from "./approvalInput.ts";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -197,7 +198,7 @@ export function requestPcApproval(dir:string,id:string,workerId:string,lease:str
  },now);
 }
 export function readPcApproval(dir:string,id:string,workerId:string,lease:string,approvalId:string,now=new Date()) {
- return mutate(dir,state=>{const task=state.tasks.find(t=>t.id===id&&t.workerId===workerId&&t.lease===lease&&t.status==="running"&&!t.cancelRequested);const row=task?.approvals?.find(r=>r.id===approvalId);return row?{...row,...(Date.parse(row.expiresAt)<=now.getTime()?{decision:"deny" as const}: {})}:undefined;},now);
+ return mutate(dir,state=>{const task=state.tasks.find(t=>t.id===id&&t.workerId===workerId&&t.lease===lease&&t.status==="running"&&!t.cancelRequested);const row=task?.approvals?.find(r=>r.id===approvalId);return row?{...row,answer:approvalWireAnswer(row),...(Date.parse(row.expiresAt)<=now.getTime()?{decision:"deny" as const}: {})}:undefined;},now);
 }
 export function decidePcApproval(dir:string,id:string,approvalId:string,decision:unknown,answer:unknown,now=new Date()) {
  return mutate(dir,state=>{
