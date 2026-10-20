@@ -1,5 +1,6 @@
 import {readSubmissions} from "../jobs/submissions.ts";
 import {approvalWireAnswer} from "./approvalInput.ts";
+import {rememberedToolConsent,type ToolTrust} from "./toolTrust.ts";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -21,7 +22,7 @@ export interface PcTask {
   applicationScope?: {rootTaskId:string;requested:number;confirmedUrls:string[];startedAt:string};
 }
 export const MAX_ACTIVITY = 12;
-export interface PcTaskState { tasks: PcTask[]; workerSeenAt?: string; workerId?: string; executors?: ExecutorStatus[]; limits?: PcLimits; }
+export interface PcTaskState { tasks: PcTask[]; workerSeenAt?: string; workerId?: string; executors?: ExecutorStatus[]; limits?: PcLimits; toolTrust?:ToolTrust; }
 export const LEASE_MS = 120_000;
 const pending = new Map<string, Promise<unknown>>();
 const active = (t: PcTask) => ["queued", "running", "cancelling"].includes(t.status);
@@ -186,6 +187,15 @@ export function setPcLimits(dir: string, limits: PcLimits, now = new Date()) {
 export function workerOnline(state: PcTaskState, now = Date.now()): boolean {
   return Boolean(state.workerSeenAt && now - Date.parse(state.workerSeenAt) < LEASE_MS);
 }
+export function setToolTrust(dir:string,mode:unknown,now=new Date()){
+ if(mode!=="ask"&&mode!=="trusted")throw Error("Invalid tool permission preference.");
+ return mutate(dir,state=>{state.toolTrust={mode,updatedAt:now.toISOString()};return state.toolTrust;},now);
+}
+function useToolTrust(state:PcTaskState,task:PcTask,row:PcApproval,now:Date){
+ if(state.toolTrust?.mode==="trusted"&&task.toolProfile==="personal"&&!row.decision&&Date.parse(row.expiresAt)>now.getTime()&&rememberedToolConsent(row)){
+  row.decision="allow";row.decidedAt=now.toISOString();row.decisionSource="saved-tool-consent";
+ }
+}
 export function requestPcApproval(dir:string,id:string,workerId:string,lease:string,request:unknown,now=new Date()) {
  return mutate(dir,state=>{
   const task=state.tasks.find(t=>t.id===id&&t.workerId===workerId&&t.lease===lease&&t.status==="running"&&!t.cancelRequested&&t.toolProfile==="personal");if(!task)return;
@@ -193,12 +203,13 @@ export function requestPcApproval(dir:string,id:string,workerId:string,lease:str
   if(!value||typeof value.id!=="string"||!/^[a-f0-9-]{36}$/i.test(value.id)||!["claude","codex"].includes(value.provider??"")||typeof value.tool!=="string"||!value.tool||value.tool.length>200||typeof value.details!=="string"||!value.details||value.details.length>12000||typeof value.fingerprint!=="string"||!/^[a-f0-9]{64}$/.test(value.fingerprint))throw Error("Invalid approval request.");
   const rows=task.approvals??=[];const existing=rows.find(r=>r.id===value.id);
   if(existing){if(existing.fingerprint!==value.fingerprint||existing.tool!==value.tool||existing.details!==value.details||existing.provider!==value.provider)throw Error("Approval request changed.");return existing;}
+  if(state.toolTrust?.mode==="trusted")while(rows.length>=100){const old=rows.findIndex(r=>r.decisionSource==="saved-tool-consent"&&r.collectedAt);if(old<0)break;rows.splice(old,1);}
   if(rows.length>=100||rows.filter(r=>!r.decision&&Date.parse(r.expiresAt)>now.getTime()).length>=10)throw Error("Too many approval requests.");
-  const row:PcApproval={id:value.id,provider:value.provider as PcApproval["provider"],tool:value.tool,details:value.details,fingerprint:value.fingerprint,createdAt:now.toISOString(),expiresAt:new Date(now.getTime()+15*60000).toISOString()};rows.push(row);return row;
+  const row:PcApproval={id:value.id,provider:value.provider as PcApproval["provider"],tool:value.tool,details:value.details,fingerprint:value.fingerprint,createdAt:now.toISOString(),expiresAt:new Date(now.getTime()+15*60000).toISOString()};useToolTrust(state,task,row,now);rows.push(row);return row;
  },now);
 }
 export function readPcApproval(dir:string,id:string,workerId:string,lease:string,approvalId:string,now=new Date()) {
- return mutate(dir,state=>{const task=state.tasks.find(t=>t.id===id&&t.workerId===workerId&&t.lease===lease&&t.status==="running"&&!t.cancelRequested);const row=task?.approvals?.find(r=>r.id===approvalId);return row?{...row,answer:approvalWireAnswer(row),...(Date.parse(row.expiresAt)<=now.getTime()?{decision:"deny" as const}: {})}:undefined;},now);
+ return mutate(dir,state=>{const task=state.tasks.find(t=>t.id===id&&t.workerId===workerId&&t.lease===lease&&t.status==="running"&&!t.cancelRequested);const row=task?.approvals?.find(r=>r.id===approvalId);if(task&&row){useToolTrust(state,task,row,now);if(row.decision)row.collectedAt??=now.toISOString();}return row?{...row,answer:approvalWireAnswer(row),...(Date.parse(row.expiresAt)<=now.getTime()?{decision:"deny" as const}: {})}:undefined;},now);
 }
 export function decidePcApproval(dir:string,id:string,approvalId:string,decision:unknown,answer:unknown,now=new Date()) {
  return mutate(dir,state=>{

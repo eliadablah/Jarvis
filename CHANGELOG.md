@@ -2,6 +2,12 @@
 
 ## 2026-10-20
 
+### Feature - One saved consent for Jarvis tools
+
+- PC activity has Always allow Jarvis tools and a reversible Ask me again preference. Saved consent applies to the running personal task and future personal tasks across restarts, covering ordinary configured MCP tools and Claude file/web/skill tools. Genuine questions, connector auth/forms, unknown requests and OS permission/escalation requests remain interactive. Provider/OS denials, task caps and evidence checks remain in force; no launcher policy or sandbox flags change.
+- Preference changes require the browser's HttpOnly session, same-origin JSON and a dedicated, state-bound HMAC capability. Worker tokens and ordinary action capabilities cannot change it. Applications of saved consent are labeled in the approval record. Already-running workers receive the existing approval format, requiring no restart.
+- Tests cover persistence, revocation, pending prompts, immutable Deny, lease ownership, protected preference changes and required-input exclusions.
+
 ### Fix - Allow clicks on empty MCP approval forms
 
 - Real Codex tool approvals use an empty object form. Jarvis previously required text even after Allow, then returned decline and misreported the tool as user-rejected. Empty forms now return an accepted empty object only after an actual Allow decision. The server also encodes that response for already-running workers; no restart or blanket permission grant is required for this fix.

@@ -2,7 +2,7 @@
 export const PC_PROTOCOL = 2;
 export const MAX_REQUEST_CHARS = 2000;
 export type ToolProfile = "scoped" | "personal";
-export interface PcApproval { id:string; provider:"claude"|"codex"; tool:string; details:string; fingerprint:string; createdAt:string; expiresAt:string; decision?:"allow"|"deny"; answer?:string; decidedAt?:string; }
+export interface PcApproval { id:string; provider:"claude"|"codex"; tool:string; details:string; fingerprint:string; createdAt:string; expiresAt:string; decision?:"allow"|"deny"; answer?:string; decidedAt?:string; decisionSource?:"saved-tool-consent"; collectedAt?:string; }
 export const CAPABILITIES = ["jobs", "browser", "browser.execute", "workspace", "computer", "desktop.launch"] as const;
 export type Capability = typeof CAPABILITIES[number];
 export type PcPlan =

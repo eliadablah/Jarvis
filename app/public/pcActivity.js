@@ -50,6 +50,7 @@ export function mountPcActivity({ api, safe, modal, toast, navigate }) {
   card.className = 'card pc-activity'; card.dataset.section = 'pc';
   card.innerHTML = '<div class="card-head"><div><div class="eyebrow">FROM REQUEST TO RESULT</div><h2>PC activity</h2></div><span class="tag" id="pc-connection">Checking PC</span></div><p class="pc-help">Ask Jarvis to complete a browser task, work with your files, or control a Windows app.</p><div class="pc-limits" id="pc-limits" aria-label="Claude and Codex usage limits"><div class="limits"></div></div><div id="pc-task-list" aria-live="polite"></div><div class="card-foot"><span id="pc-agents-summary">Checking local agents</span><button class="text-btn" id="pc-agents">PC agents ↗</button></div>';
   grid.append(card);
+  const trustBox=document.createElement('div');trustBox.className='pc-tool-trust';card.querySelector('#pc-task-list').before(trustBox);
   const nav = document.createElement('button'); nav.className = 'nav-item'; nav.dataset.view = 'pc';
   nav.innerHTML = '<span aria-hidden="true">▣</span><span>PC activity</span>';
   document.querySelector('.sidebar nav').append(nav); nav.onclick = () => navigate('pc');
@@ -111,6 +112,9 @@ export function mountPcActivity({ api, safe, modal, toast, navigate }) {
         observed.set(task.id, task.status);
       }
       state = next; firstLoad = false;
+      const trusted=state.toolTrust?.mode==='trusted';
+      const trustHtml='<div><strong>'+(trusted?'Jarvis tools are trusted':'Skip repeated tool approvals')+'</strong><p>'+(trusted?'Your saved permission covers connected tools across tasks. Questions and system permission requests still pause.':'Allow your configured tools for current and future requests, instead of approving each file read or browser step.')+'</p></div><button class="'+(trusted?'text-btn':'pc-approval-allow')+'" data-tool-trust="'+(trusted?'ask':'trusted')+'">'+(trusted?'Ask me again':'Always allow Jarvis tools')+'</button>';
+      if(trustBox.innerHTML!==trustHtml)trustBox.innerHTML=trustHtml;
       drawLimits(state.limits);
       document.querySelector('#pc-connection').textContent = !state.enabled ? 'Not enabled' : state.workerOnline ? 'PC online' : 'PC offline';
       const row = document.querySelectorAll('.connections .connection-row')[2];
@@ -140,6 +144,8 @@ export function mountPcActivity({ api, safe, modal, toast, navigate }) {
     } finally { loading = false; }
   }
   card.addEventListener('click', async event => {
+    const trustButton=event.target.closest('[data-tool-trust]');
+    if(trustButton){trustButton.disabled=true;try{await api('/api/pc/tasks/tool-trust','POST',{mode:trustButton.dataset.toolTrust,trustToken:state.toolTrustToken});toast(trustButton.dataset.toolTrust==='trusted'?'Saved. Jarvis will use your connected tools without repeated approvals.':'Saved. Jarvis will ask before using tools again.');await refresh();}catch(e){toast(e.message);trustButton.disabled=false;}return;}
     const approvalButton=event.target.closest('[data-approval]');
     if(approvalButton){
       const task=state.tasks.find(t=>t.id===approvalButton.dataset.task),approval=task?.approvals?.find(a=>a.id===approvalButton.dataset.approval);

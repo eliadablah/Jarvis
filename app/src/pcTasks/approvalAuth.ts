@@ -1,5 +1,6 @@
 import {createHmac,randomBytes,timingSafeEqual} from "node:crypto";
 import type {IncomingMessage,ServerResponse} from "node:http";
+import type {ToolTrust} from "./toolTrust.ts";
 const secret=randomBytes(32),sessions=new Map<string,number>(),cookie="jarvis_approval_session";
 const sessionOf=(req:IncomingMessage)=>req.headers.cookie?.split(/;\s*/).find(c=>c.startsWith(cookie+"="))?.slice(cookie.length+1)??"";
 type Target={id:string;lease?:string;workerId?:string;approvals?:{id:string;fingerprint:string;decision?:string;expiresAt:string}[]};
@@ -17,4 +18,15 @@ export function verifyApprovalToken(req:IncomingMessage,task:Target,approvalId:s
  const sid=sessionOf(req),until=sessions.get(sid);if(!until||until<now||typeof token!=="string"||!/^[a-f0-9]{64}$/.test(token))return false;
  const approval=task.approvals?.find(r=>r.id===approvalId);if(!approval||Date.parse(approval.expiresAt)<=now)return false;
  return timingSafeEqual(Buffer.from(token,"hex"),Buffer.from(sign(sid,task,approvalId,approval.fingerprint),"hex"));
+}
+const trustSign=(sid:string,trust?:ToolTrust)=>createHmac("sha256",secret).update(JSON.stringify(["jarvis-tool-trust-v1",sid,trust?.mode??"ask",trust?.updatedAt??null])).digest("hex");
+export function toolTrustToken(req:IncomingMessage,res:ServerResponse,trust?:ToolTrust){
+ const issued=String(res.getHeader("Set-Cookie")??"").split(";")[0]?.slice(cookie.length+1);
+ const sid=issued||sessionOf(req);if(!sid||!sessions.has(sid))throw Error("Approval browser session required.");
+ return trustSign(sid,trust);
+}
+export function verifyToolTrustToken(req:IncomingMessage,trust:ToolTrust|undefined,token:unknown,now=Date.now()):boolean{
+ const sid=sessionOf(req),until=sessions.get(sid);
+ if(!until||until<now||typeof token!=="string"||!/^[a-f0-9]{64}$/.test(token))return false;
+ return timingSafeEqual(Buffer.from(token,"hex"),Buffer.from(trustSign(sid,trust),"hex"));
 }

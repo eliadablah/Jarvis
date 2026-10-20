@@ -10,7 +10,8 @@ import {recordSubmission,readSubmissions} from "../jobs/submissions.ts";
 import {publishUpdate} from "../live.ts";
 import {syncTracker,sharedTrackerState} from "../jobs/api.ts";
 import {requestPcApproval,readPcApproval,decidePcApproval} from "./store.ts";
-import {approvalTokens,verifyApprovalToken} from "./approvalAuth.ts";
+import {approvalTokens,verifyApprovalToken,toolTrustToken,verifyToolTrustToken} from "./approvalAuth.ts";
+import {setToolTrust} from "./store.ts";
 function json(res: ServerResponse, status: number, value?: unknown): void {
   res.writeHead(status, { ...appHeaders(), "Content-Type": "application/json", "Cache-Control": "no-store" });
   res.end(value === undefined ? undefined : JSON.stringify(value));
@@ -46,9 +47,14 @@ export async function handlePcTasks(req: IncomingMessage, res: ServerResponse, p
       const receipts=await readSubmissions(dir);
       const approvals=approvalTokens(req,res,state.tasks);
       json(res, 200, { protocol: PC_PROTOCOL, enabled: Boolean(config.pcWorkerToken), workerOnline: workerOnline(state), workerSeenAt: state.workerSeenAt,
-        executors: state.executors ?? [], limits: state.limits ?? {}, tasks: state.tasks.slice(-100).reverse().map(task=>({...publicTask(task),approvals:approvals.get(task.id)??[],confirmedThisTask:receipts.filter(r=>r.taskId===task.id).length})) }); return;
+        executors: state.executors ?? [], limits: state.limits ?? {}, toolTrust:state.toolTrust??{mode:"ask"},toolTrustToken:toolTrustToken(req,res,state.toolTrust),tasks: state.tasks.slice(-100).reverse().map(task=>({...publicTask(task),approvals:approvals.get(task.id)??[],confirmedThisTask:receipts.filter(r=>r.taskId===task.id).length})) }); return;
     }
     if (method !== "POST") { json(res, 405, { error: "Method not allowed" }); return; }
+    if(path==="/api/pc/tasks/tool-trust"){
+      checkRequestSource(req.headers);const body=await bodyOf(req),state=await pcSnapshot(dir);
+      if(!verifyToolTrustToken(req,state.toolTrust,body.trustToken)){json(res,403,{error:"Refresh Jarvis before changing saved tool permissions."});return;}
+      try{const trust=await setToolTrust(dir,body.mode);json(res,200,{toolTrust:trust});publishUpdate("pc");}catch(e){json(res,400,{error:e instanceof Error?e.message:"Could not save tool permissions."});}return;
+    }
     const decisionMatch=/^\/api\/pc\/tasks\/([0-9a-f-]{36})\/approvals\/([0-9a-f-]{36})\/decision$/.exec(path);
     if(decisionMatch){
       checkRequestSource(req.headers);const body=await bodyOf(req);const task=(await pcSnapshot(dir)).tasks.find(t=>t.id===decisionMatch[1]);
