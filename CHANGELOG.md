@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-10-20
+
+### Feature - Personal Claude Code/Codex tools for direct Jarvis requests
+
+- Direct PC requests now inherit the user's installed tools, plugins, skills and settings. Claude no longer receives restrictive tool/skill filters for these requests; Codex loads the normal .codex profile instead of the worker's separate home. No new approval/sandbox overrides are added to personal runs. Existing scoped launches remain available for scheduled runs and older tasks. Task retries preserve their profile; new personal requests wait for personal-tools-v1.
+- Job limits, verified receipts, Google synchronization, task ownership and duplicate checks remain in place. Server chat remains read-only. Tool availability does not grant authority for unrelated actions or bypass configured permissions.
+- Validation: 124 app/41 worker tests pass, including profile inheritance, scheduler separation, old-worker gating and absence of permission overrides. A real Claude launch loaded 103 tools and the installed Firecrawl plugin, discovered the connected Firecrawl search tool, then respected its existing permission refusal. No search ran. Normal Codex startup remains unverified because Windows denied access to its state databases in this diagnostic session, even after a filesystem grant. No ACLs or approval settings changed.
+- Automatic review rejected an initial launch design that overrode permission behavior. The final implementation inherits existing policy without those overrides. Firecrawl's exact search permission and local worker activation remain pending.
+
 ## 2026-10-19
 
 ### Feature - Approved automatic Google logging and shared job history

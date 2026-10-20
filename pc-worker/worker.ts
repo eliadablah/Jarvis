@@ -56,6 +56,7 @@ export function validateClaim(value: unknown, workerId: string): ClaimedTask {
       task.workerId !== workerId || typeof task.request !== "string" || task.request.length > 2000)
     throw new Error("Invalid task claim.");
   const intent = parsePcIntent(task.request);
+  if (task.toolProfile !== undefined && task.toolProfile !== "personal" && task.toolProfile !== "scoped") throw new Error("Unknown task tool profile.");
   if (intent?.type !== "task" || JSON.stringify(intent.plan) !== JSON.stringify(task.plan)) throw new Error("Task scope does not match its request.");
   return task;
 }

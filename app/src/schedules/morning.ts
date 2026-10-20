@@ -113,7 +113,7 @@ export async function tickMorning(config: AppConfig, now = new Date()): Promise<
   if (!(await readScheduleState(config)).enabled || !isDue(now, settings)) return;
   const date = localNow(now, settings.timezone).date;
   if (state.tasks.some(t => t.requestId === morningRequestId(date))) return;
-  return enqueuePcTask(dir, morningRequest(settings.count), morningRequestId(date), now, morningDisplay(settings.count));
+  return enqueuePcTask(dir, morningRequest(settings.count), morningRequestId(date), now, morningDisplay(settings.count), "scoped");
 }
 
 // --- What the dashboard shows ---

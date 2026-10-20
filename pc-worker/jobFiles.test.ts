@@ -4,8 +4,24 @@ import { mkdtemp, mkdir, writeFile, readFile, rm, symlink } from "node:fs/promis
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { scopedJobPath, jobFileCall } from "./job-files-server.ts";
-import { codexArgs, jobPrompt, canRetryStartup, canFallback } from "./agents.ts";
+import { codexArgs, claudeArgs, codexEnvironment, jobPrompt, canRetryStartup, canFallback } from "./agents.ts";
+import {homedir} from "node:os";
 import { emptyReport } from "../app/src/pcTasks/protocol.ts";
+test("personal runs inherit installed tools/settings without overriding approval or sandbox policies",()=>{
+ const s={server:"https://example.com",token:"test",jobsDir:"C:/jobs",claudeBin:"claude",codexHome:"C:/private/worker-home"};
+ const claude=claudeArgs({kind:"jobs",action:"submit",maxApplications:4},s,false,"task","personal");
+ for(const flag of ["--restricted","--strict-mcp-config","--disable-slash-commands","--tools","--allowedTools","--disallowedTools","--permission-mode","--permission-prompts","--dangerously-skip-permissions"])assert.equal(claude.includes(flag),false,flag);
+ assert.match(claude.join(" "),/jarvis-job-files/);
+ const codex=codexArgs(s,true,true,true,"submit","task","personal");
+ for(const flag of ["--ignore-user-config","--disable","--sandbox","--dangerously-bypass-approvals-and-sandbox"])assert.equal(codex.includes(flag),false,flag);
+ assert.doesNotMatch(codex.join(" "),/approval_policy=|approvals_reviewer=|web_search=/);
+ assert.match(codex.join(" "),/jarvis-job-files.required=true/);
+ assert.equal(codexEnvironment(s,"personal").CODEX_HOME,join(homedir(),".codex"));
+ assert.equal(codexEnvironment(s).CODEX_HOME,s.codexHome);
+ assert.match(jobPrompt("Apply to 4 jobs",4,"submit","","personal"),/Firecrawl when connected/);
+ assert.doesNotMatch(jobPrompt("Apply to 4 jobs",4,"submit","","personal"),/no other shell command is allowed/);
+ assert.match(jobPrompt("Apply to 4 jobs",4,"submit"),/no other shell command is allowed/);
+});
 test("automatic retry handles transient no-action failures and stops at denied or uncertain actions",()=>{
  const run={failure:"unavailable" as const,safeToRetry:true,report:emptyReport("needs_input","Connection reset")};
  assert.equal(canRetryStartup(run),true);

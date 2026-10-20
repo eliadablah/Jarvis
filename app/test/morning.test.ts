@@ -62,6 +62,7 @@ test("the server queues the morning run once a day, can be paused, and drops sta
 
     // A scheduled run still waiting from yesterday (PC was off) is cancelled, not run late.
     const next = await tickMorning(config, at("2026-10-21T12:01:00Z"));
+    assert.equal(next?.toolProfile,"scoped");
     assert.equal(next?.requestId, "scheduled-morning-2026-10-21");
     const tasks = (await readPcTasks(dir)).tasks;
     assert.equal(tasks.find(t => t.requestId === "scheduled-morning-2026-10-19")?.status, "cancelled");

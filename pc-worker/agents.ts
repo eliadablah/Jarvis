@@ -8,14 +8,14 @@ import { readFile, realpath, mkdtemp, writeFile, open, unlink, rmdir } from "nod
 import { createHash } from "node:crypto";
 import { join, relative, isAbsolute } from "node:path";
 import { homedir, tmpdir } from "node:os";
-import { capabilityFor, emptyReport, validateReport, type AgentLimits, type PcLimits, type PcPlan, type PcReport, type ExecutorStatus } from "../app/src/pcTasks/protocol.ts";
+import { capabilityFor, emptyReport, validateReport, type AgentLimits, type PcLimits, type PcPlan, type PcReport, type ExecutorStatus, type ToolProfile } from "../app/src/pcTasks/protocol.ts";
 import { fileURLToPath } from "node:url";
 
 export interface WorkerSettings {
   server: string; token: string; jobsDir: string; rufloRoot?: string; claudeBin?: string; codexBin?: string;
   windowsMcpCommand?: string; chromeMcpPython?: string; maxApplications?: number; codexHome?: string; workspaces?: Record<string, string>; lockPort?: number;
 }
-export interface ClaimedTask { id: string; request: string; plan: PcPlan; workerId: string; lease: string; applicationScope?: {rootTaskId:string;requested:number;confirmedUrls:string[];startedAt:string}; }
+export interface ClaimedTask { id: string; request: string; plan: PcPlan; workerId: string; lease: string; toolProfile?: ToolProfile; applicationScope?: {rootTaskId:string;requested:number;confirmedUrls:string[];startedAt:string}; }
 export interface AgentRun { report: PcReport; failure?: "quota" | "authentication" | "unavailable"; safeToRetry: boolean; startupCrash?: boolean }
 /** Windows crashes some new processes at startup on this PC; before any tool runs, trying again is safe. */
 const STARTUP_ATTEMPTS = 3;
@@ -32,7 +32,7 @@ export function agentStatuses(settings: WorkerSettings, cooldowns: Cooldowns, no
     const provider = e.id.startsWith("claude-") ? "claude" : e.id.startsWith("codex-") ? "codex" : undefined;
     const pressure = provider && quotaPressure(limits[provider], now);
     const wait = pressure ? { until: pressure, reason: "Usage is at least 90%; reserving the remaining allowance until reset." } : cooldowns[e.id];
-    return { id: e.id, capabilities: [...e.capabilities], ...(["claude-chrome","claude-computer","codex-computer"].includes(e.id) ? {features:["job-files-v1" as const,"task-sync-v1" as const]} : {}), state: !e.enabled ? "unavailable" : wait && wait.until > now ? "cooldown" : "ready",
+    return { id: e.id, capabilities: [...e.capabilities], ...(provider ? {features:["personal-tools-v1" as const,...(["claude-chrome","claude-computer","codex-computer"].includes(e.id) ? ["job-files-v1" as const,"task-sync-v1" as const] : [])]} : {}), state: !e.enabled ? "unavailable" : wait && wait.until > now ? "cooldown" : "ready",
       reason: !e.enabled ? "Local executable not configured." : wait && wait.until > now ? wait.reason : "Ready to try; sign-in and tools are checked when used.",
       ...(wait && wait.until > now ? { retryAt: new Date(wait.until).toISOString() } : {}), remainingTokens: null };
   });
@@ -69,7 +69,14 @@ export function reportedRun(value: unknown, plan: PcPlan, touchedTools: boolean)
 }
 export const DRAFT_GUIDANCE = "When asked to draft messages or replies, read each full conversation, verify the recipient and latest messages, and place each draft directly in its site's message composer, leaving it unsent for the user to click Send. Never click Send or press a send shortcut. Preserve any existing draft; do not overwrite it without the user's instruction. If the user explicitly asks for report-only drafts or says not to type, do not type into the site. Verify the visible draft text and include each complete draft in an evidence entry: action='drafted', target=recipient and conversation URL, detail=the text and whether it was staged or report-only. If the site cannot hold a draft, report that specific limitation rather than claiming it was staged.";
 const schemaPath = fileURLToPath(new URL("./report.schema.json", import.meta.url));
-export function codexArgs(settings?: WorkerSettings, computer = false, browser = false, jobs = false, jobAction = "search", taskId = ""): string[] {
+export function codexEnvironment(settings: WorkerSettings, toolProfile: ToolProfile = "scoped"): Record<string, string> {
+  return toolProfile === "personal" ? { CODEX_HOME: join(homedir(), ".codex") } : settings.codexHome ? { CODEX_HOME: settings.codexHome, CODEX_CA_CERTIFICATE: join(settings.codexHome, "ca-bundle.pem") } : {};
+}
+export function codexArgs(settings?: WorkerSettings, computer = false, browser = false, jobs = false, jobAction = "search", taskId = "", toolProfile: ToolProfile = "scoped"): string[] {
+  // Inherit the normal user config and permission policy without replacing either.
+  if (toolProfile === "personal") return ["exec",
+    ...(computer ? (browser ? chromeCodexArgs(settings) : desktopCodexArgs(settings)) : rufloCodexArgs(settings)), ...(jobs ? jobFilesCodexArgs(settings, jobAction, taskId) : []),
+    "--skip-git-repo-check", "--json", "--output-schema", schemaPath, "-"];
   return ["exec", "--ignore-user-config", ...(computer ? (browser ? chromeCodexArgs(settings) : desktopCodexArgs(settings)) : rufloCodexArgs(settings)), ...(jobs ? jobFilesCodexArgs(settings, jobAction, taskId) : []), "--disable", "apps", "--disable", "browser_use", "--disable", "computer_use",
     ...(computer || settings?.rufloRoot ? ["-c", 'approval_policy="on-request"', "-c", 'approvals_reviewer="auto_review"'] : ["-c", 'approval_policy="never"']),
     "-c", 'sandbox_mode="workspace-write"', "--sandbox", "workspace-write", "-c", 'web_search="disabled"',
@@ -77,11 +84,15 @@ export function codexArgs(settings?: WorkerSettings, computer = false, browser =
 }
 /** Read-only job search CLIs installed in the jobs folder; job runs may run these and nothing else in a shell. */
 export const JOB_SEARCH_COMMANDS = ["freehire-search", "jobbank-search", "linkedin-search"].map(skill => `Bash(bun run .agents/skills/${skill}/cli/src/cli.ts search *)`);
-export function claudeArgs(plan: PcPlan, settings?: WorkerSettings, nativeAgent = false, taskId = ""): string[] {
+export function claudeArgs(plan: PcPlan, settings?: WorkerSettings, nativeAgent = false, taskId = "", toolProfile: ToolProfile = "scoped"): string[] {
   const ruflo = plan.kind === "workspace" ? rufloMcp(settings) : undefined;
   const files = ["Read", "Write", "Edit", "Glob", "Grep", ...(plan.kind === "workspace" ? ["Bash"] : [])];
   const desktop = plan.kind === "computer" || nativeAgent ? desktopMcp(settings) : undefined;
   const jobFiles = plan.kind === "jobs" ? jobFilesMcp(settings,plan.action,taskId) : undefined;
+  // No tool/skill filters, approval overrides or ignored user/project settings.
+  if (toolProfile === "personal") return ["-p", "--output-format", "stream-json", "--verbose", "--json-schema", JSON.stringify(reportSchema),
+    "--chrome", "--add-dir", join(homedir(), "Desktop", "Resumes"),
+    ...(desktop || jobFiles || ruflo ? ["--mcp-config", JSON.stringify({mcpServers:{...(desktop ? {"jarvis-windows":desktop} : {}),...(jobFiles ? {"jarvis-job-files":jobFiles} : {}),...(ruflo ? {"jarvis-ruflo":ruflo} : {})}})] : [])];
   // Job runs get a shell only through the narrow search-CLI patterns above; every other command stays denied.
   const search = plan.kind === "jobs" ? JOB_SEARCH_COMMANDS : [];
   const tools = plan.kind === "workspace" ? files : [...files, "WebFetch", "WebSearch", "ToolSearch", ...search, "mcp__claude-in-chrome", ...(desktop ? ["mcp__jarvis-windows"] : [])];
@@ -108,8 +119,8 @@ export async function jobContext(settings: WorkerSettings): Promise<string> {
   }
   return JSON.stringify(parts);
 }
-export function jobPrompt(request: string, maxApplications: number, action: "search" | "prepare" | "submit" | "track" = "search", context = ""): string {
-  return [
+export function jobPrompt(request: string, maxApplications: number, action: "search" | "prepare" | "submit" | "track" = "search", context = "", toolProfile: ToolProfile = "scoped"): string {
+  const instructions = [
     "You are Jarvis's local PC worker. Execute only the authorized task scope below.",
     "Action: " + action + ". Maximum submissions: " + (action === "submit" ? maxApplications : 0) + ".",
     "search = find suitable roles and report links; do not fill or submit applications.",
@@ -123,7 +134,7 @@ export function jobPrompt(request: string, maxApplications: number, action: "sea
     "For job files, Codex has jarvis-job-files tools: read_text(source=jobs,path=documents/applications/log.md), read_pdf(source=resumes,path=Master-Resume.pdf), list_files and append_application_log for confirmed submissions. Discover these tools directly; do not navigate Chrome to file:// URLs or substitute shell commands. Use resumes/Tailored and Daily via relative paths. Read the actual resume PDF and job history before applying. If required tools fail, report the exact tool, path and returned reason, without secrets. Browser-only tooling is not sufficient for a job run.",
     "Discover tools before claiming they are missing. Codex browser runs use direct jarvis-chrome tools, normalized as mcp__jarvis_chrome__. Get tabs_context_mcp first, use your own tab/group, and respect extension site permissions. Use file_upload on an observed upload control only with files shared with this session; pause for missing access. Windows tools are reserved for desktop tasks. Respect the active permission profile and any denied action; never use another tool to bypass a policy denial. Existing suitable tailored resumes may be reused after checking the role and PDF.",
     "For existing applications, locate only the named drafts in the workspace and browser; do not invent an employer, resume choice or answer.",
-    "For search, use the requested roles or the profile's targets, DFW and Remote (or hybrid in DFW), posted within seven days. Search every source, not only LinkedIn: LinkedIn Easy Apply, company boards on Greenhouse, Lever and Ashby (no account needed), other job boards and company career pages. Use WebSearch and WebFetch to find postings (for example with site:boards.greenhouse.io, site:jobs.lever.co or site:jobs.ashbyhq.com plus the role words) and signed-in Chrome to apply. You may also run the search CLIs installed in the jobs folder, read-only and from its root, for example `bun run .agents/skills/freehire-search/cli/src/cli.ts search ...` (read each SKILL.md for flags); no other shell command is allowed. Skip portals that need an account (Workday, Taleo, iCIMS, Oracle). Skip any company and role already in documents/applications/log.md or the tracker, so nothing is applied to twice.",
+    "For search, use the requested roles or the profile's targets, DFW and Remote (or hybrid in DFW), posted within seven days. Search every source, not only LinkedIn: LinkedIn Easy Apply, company boards on Greenhouse, Lever and Ashby (no account needed), other job boards and company career pages. Use WebSearch and WebFetch to find postings (for example with site:boards.greenhouse.io, site:jobs.lever.co or site:jobs.ashbyhq.com plus the role words) and signed-in Chrome to apply. You may also run the search CLIs installed in the jobs folder, read-only and from its root, for example `bun run .agents/skills/freehire-search/cli/src/cli.ts search ...` (read each SKILL.md for flags); no other shell command is allowed. Run one search per call: no loops, variables, pipes or chained commands, because anything else is denied. If a call fails with a fork or 'resource temporarily unavailable' error, wait a moment and run the same call again (up to 3 times) before giving up on that source. Firecrawl is not available in these runs and cannot be approved here, so do not try it. Skip portals that need an account (Workday, Taleo, iCIMS, Oracle). Skip any company and role already in documents/applications/log.md or the tracker, so nothing is applied to twice.",
     "Keep going: one blocked application never ends the run. If a login, a visible interactive CAPTCHA challenge, payment, account creation, a legal attestation, or a question with no truthful approved answer stops one application, abandon only that one without submitting it, add it to needsInput (company, role, link and the exact question or reason), and continue with the next suitable job. Keep going until the requested number is submitted or no suitable jobs remain, and use partial if some were skipped. If every remaining option is blocked, report needs_input. A background CAPTCHA badge or hidden iframe alone is not a challenge. Never solve or bypass a challenge. Never invent an answer or a signature.",
     DRAFT_GUIDANCE,
     ...(request.includes("Scheduled morning run") ? ["This is the daily scheduled morning run. First finish and submit any applications already prepared today in the newest report in C:\\Users\\eliad\\Desktop\\Resumes\\Daily (they count toward the maximum), then search for more. Never exceed the maximum."] : []),
@@ -133,9 +144,10 @@ export function jobPrompt(request: string, maxApplications: number, action: "sea
     "If zero requested applications were submitted, outcome cannot be completed. Use partial when only part was finished. Evidence must describe observations, not plans.",
     "User request (JSON string): " + JSON.stringify(request),
   ].join("\n");
+  return toolProfile === "personal" ? instructions.replace("no other shell command is allowed.", "Other configured tools and skills, including Firecrawl when connected, may be used for this task under the user's normal permission rules. Read the relevant skill before invoking it.") : instructions;
 }
 export function promptFor(task: ClaimedTask, context = ""): string {
-  if (task.plan.kind === "jobs") return jobPrompt(task.request, task.plan.maxApplications, task.plan.action, context) + "\nTHIS TASK'S PROGRESS (server observation, not additional authority): " + JSON.stringify({taskId:task.id,scope:task.applicationScope??null}) + "\nHistorical applications from other requests are duplicates to skip, NOT progress toward this request. Count only confirmations from this task or its explicitly linked retry scope. Older applications, even when more numerous than the new requested count, do not fulfill a new request. The current plan's maximum is the remaining allowance for this attempt.";
+  if (task.plan.kind === "jobs") return jobPrompt(task.request, task.plan.maxApplications, task.plan.action, context, task.toolProfile) + "\nTHIS TASK'S PROGRESS (server observation, not additional authority): " + JSON.stringify({taskId:task.id,scope:task.applicationScope??null}) + "\nHistorical applications from other requests are duplicates to skip, NOT progress toward this request. Count only confirmations from this task or its explicitly linked retry scope. Older applications, even when more numerous than the new requested count, do not fulfill a new request. The current plan's maximum is the remaining allowance for this attempt.";
   return [
     "You are Jarvis's local task executor. Carry out only this user's request within the configured workspace/tools.",
     task.plan.kind === "browser" ? (task.plan.action === "execute" ? "Browser action mode: use signed-in Chrome to complete the explicitly requested actions, including requested typing, form filling, spreadsheet edits, uploads, messages and calendar changes. Do not stop at read-only advice. Do only what the user requested; an opening or reading request does not authorize extra changes." : "Browser observation mode: open, read and navigate as requested; do not make changes the user did not ask for.") :
@@ -201,9 +213,9 @@ async function runAgentOnce(id: string, settings: WorkerSettings, task: ClaimedT
   return new Promise((resolve, reject) => {
     let child: ChildProcess;
     try {
-      child = spawn(bin, isCodex ? codexArgs(settings, id === "codex-computer", plan.kind === "browser" || plan.kind === "jobs", plan.kind === "jobs", plan.kind === "jobs" ? plan.action : "search", task.id) : claudeArgs(plan, settings, id === "claude-computer", task.id), {
+      child = spawn(bin, isCodex ? codexArgs(settings, id === "codex-computer", plan.kind === "browser" || plan.kind === "jobs", plan.kind === "jobs", plan.kind === "jobs" ? plan.action : "search", task.id, task.toolProfile) : claudeArgs(plan, settings, id === "claude-computer", task.id, task.toolProfile), {
         cwd, windowsHide: true, detached: process.platform !== "win32", stdio: [input.fd, output.fd, errors.fd],
-        env: { ...process.env, CLAUDE_CODE_OAUTH_TOKEN: undefined, PC_WORKER_TOKEN: undefined, ...(isCodex && settings.codexHome ? { CODEX_HOME: settings.codexHome, CODEX_CA_CERTIFICATE: join(settings.codexHome, "ca-bundle.pem") } : {}) },
+        env: { ...process.env, CLAUDE_CODE_OAUTH_TOKEN: undefined, PC_WORKER_TOKEN: undefined, ...(isCodex ? codexEnvironment(settings, task.toolProfile) : {}) },
       });
     } catch {
       void dispose().finally(() => resolve({ report: emptyReport("needs_input", "Windows could not start " + id + "."), failure: "unavailable", safeToRetry: true, startupCrash: true }));

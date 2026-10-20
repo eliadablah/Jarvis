@@ -3,7 +3,7 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { parsePcIntent } from "./intent.ts";
-import { MAX_REQUEST_CHARS, capabilityFor, validateReport, type PcPlan, type PcReport, type ExecutorStatus, type PcLimits } from "./protocol.ts";
+import { MAX_REQUEST_CHARS, capabilityFor, validateReport, type PcPlan, type PcReport, type ExecutorStatus, type PcLimits, type ToolProfile } from "./protocol.ts";
 export { MAX_REQUEST_CHARS } from "./protocol.ts";
 export type PcTaskStatus = "queued" | "running" | "cancelling" | "completed" | "partial" | "needs_input" | "needs_attention" | "failed" | "cancelled" | "done";
 export interface PcTask {
@@ -14,7 +14,8 @@ export interface PcTask {
   activity?: { at: string; text: string }[];
   cancelRequested?: boolean; report?: PcReport; reportId?: string; requestId?: string;
   retryOf?: string; retryTaskId?: string;
-  requiredFeature?: "job-files-v1" | "task-sync-v1";
+  requiredFeature?: "job-files-v1" | "task-sync-v1" | "personal-tools-v1";
+  toolProfile?: ToolProfile;
   applicationScope?: {rootTaskId:string;requested:number;confirmedUrls:string[];startedAt:string};
 }
 export const MAX_ACTIVITY = 12;
@@ -56,7 +57,7 @@ async function mutate<T>(dir: string, change: (state: PcTaskState) => T | Promis
   try { return await result; } finally { if (pending.get(dir) === result) pending.delete(dir); }
 }
 export function pcSnapshot(dir: string, now = new Date()): Promise<PcTaskState> { return mutate(dir, s => s, now); }
-export function enqueuePcTask(dir: string, request: string, requestId?: string, now = new Date(), displayRequest?: string): Promise<PcTask> {
+export function enqueuePcTask(dir: string, request: string, requestId?: string, now = new Date(), displayRequest?: string, toolProfile: ToolProfile = "personal"): Promise<PcTask> {
   if (request.length > MAX_REQUEST_CHARS) throw new Error("PC request exceeds 2000 characters; shorten it without removing limits.");
   const intent = parsePcIntent(request);
   if (intent?.type !== "task") throw new Error("Name an explicit PC action.");
@@ -65,7 +66,9 @@ export function enqueuePcTask(dir: string, request: string, requestId?: string, 
     if (existing) { if (existing.request !== request) throw new Error("Request ID already used."); return existing; }
     if (state.tasks.filter(active).length >= 100) throw new Error("PC queue is full.");
     const task: PcTask = { id: randomUUID(), kind: intent.plan.kind, plan: intent.plan, request,
+      toolProfile,
       ...(intent.plan.kind === "jobs" && intent.plan.action === "submit" ? {requiredFeature:"task-sync-v1" as const} : {}),
+      ...(toolProfile === "personal" && intent.plan.kind !== "desktop" ? {requiredFeature:"personal-tools-v1" as const} : {}),
       status: "queued", createdAt: now.toISOString(), ...(displayRequest ? { displayRequest: displayRequest.slice(0, MAX_REQUEST_CHARS) } : {}), ...(requestId ? { requestId } : {}) };
     state.tasks.push(task); return task;
   }, now);
@@ -92,7 +95,9 @@ export function retryPcTask(dir: string, id: string, now = new Date()): Promise<
     const intent = parsePcIntent(request);
     if (intent?.type !== "task") throw new Error("Retry needs an explicit scoped task.");
     const task: PcTask = {id:randomUUID(),kind:intent.plan.kind,plan:intent.plan,request,status:"queued",createdAt:now.toISOString(),retryOf:id,
+      toolProfile: source.toolProfile ?? "scoped",
       displayRequest:"Try again: " + (source.displayRequest ?? source.request).slice(0,1800), ...(intent.plan.kind === "jobs" ? { requiredFeature: "task-sync-v1" as const } : {})};
+    if(task.toolProfile === "personal" && task.plan?.kind !== "desktop") task.requiredFeature = "personal-tools-v1";
     source.retryTaskId = task.id;
     state.tasks.push(task); return task;
   },now);
@@ -104,7 +109,7 @@ export function claimNextPcTask(dir: string, workerId: string, executors: Execut
     const task = state.tasks.find(t => t.status === "queued"); if (!task) return;
     if (!task.plan) { task.status = "needs_input"; task.result = "Older task needs an explicit search, prepare, or submit request."; return; }
     const candidates = executors.filter(e => e.capabilities.includes(capabilityFor(task.plan!)) && (!task.requiredFeature || e.features?.includes(task.requiredFeature)));
-    if (task.requiredFeature && !candidates.length) { task.progress = "Waiting for the updated worker with task-scoped submission receipts. Restart the idle PC worker to activate the fix."; return; }
+    if (task.requiredFeature && !candidates.length) { task.progress = task.requiredFeature === "personal-tools-v1" ? "Waiting for the updated worker to connect your Claude Code and Codex tools. Restart the idle PC worker to activate them." : "Waiting for the updated worker with task-scoped submission receipts. Restart the idle PC worker to activate the fix."; return; }
     if (!candidates.some(e => e.state === "ready")) {
       task.progress = candidates.some(e => e.state === "cooldown") ? "Waiting for a capable agent's usage limit to reset." : "No ready agent has the required tools. Check PC agents.";
       if (!candidates.length && ["computer", "browser.execute"].includes(capabilityFor(task.plan))) { task.progress = "Waiting for the updated PC worker to connect its action tools. Restart the idle worker to activate them."; }

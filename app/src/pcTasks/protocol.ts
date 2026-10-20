@@ -1,6 +1,7 @@
 // Shared by the private server and Windows worker. No credentials here.
 export const PC_PROTOCOL = 2;
 export const MAX_REQUEST_CHARS = 2000;
+export type ToolProfile = "scoped" | "personal";
 export const CAPABILITIES = ["jobs", "browser", "browser.execute", "workspace", "computer", "desktop.launch"] as const;
 export type Capability = typeof CAPABILITIES[number];
 export type PcPlan =
@@ -14,7 +15,7 @@ export interface Evidence { action: string; target: string; detail: string }
 export interface PcReport { outcome: Outcome; summary: string; evidence: Evidence[]; needsInput: string[]; submitted: number }
 export interface ExecutorStatus {
   id: string; capabilities: Capability[]; state: "ready" | "cooldown" | "unavailable";
-  features?: ("job-files-v1" | "task-sync-v1")[];
+  features?: ("job-files-v1" | "task-sync-v1" | "personal-tools-v1")[];
   reason: string; retryAt?: string; remainingTokens: null;
 }
 export function capabilityFor(plan: PcPlan): Capability { return plan.kind === "desktop" ? "desktop.launch" : plan.kind === "browser" && plan.action === "execute" ? "browser.execute" : plan.kind; }

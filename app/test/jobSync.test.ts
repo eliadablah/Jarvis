@@ -13,8 +13,19 @@ import {summarize} from "../src/jobs/tracker.ts";
 import {handlePcTasks} from "../src/pcTasks/api.ts";
 import {loadConfig} from "../src/config.ts";
 import {handleLive,publishUpdate,closeLiveClients} from "../src/live.ts";
-const agents=[{id:"codex-computer",state:"ready" as const,reason:"ready",remainingTokens:null,capabilities:["jobs" as const],features:["job-files-v1" as const,"task-sync-v1" as const]}];
+const agents=[{id:"codex-computer",state:"ready" as const,reason:"ready",remainingTokens:null,capabilities:["jobs" as const],features:["job-files-v1" as const,"task-sync-v1" as const,"personal-tools-v1" as const]}];
 const receipt=(n:number)=>({company:"Example "+n,role:"Support",url:"https://example.com/jobs/"+n,confirmation:"Application received"});
+test("direct requests use personal tools, scheduled profiles and retry scopes remain explicit",async()=>{
+ const dir=await mkdtemp(join(tmpdir(),"jarvis-profile-"));try{
+  const manual=await enqueuePcTask(dir,"Find support jobs");assert.equal(manual.toolProfile,"personal");
+  const old=[{...agents[0]!,features:["job-files-v1" as const,"task-sync-v1" as const]}];
+  assert.equal(await claimNextPcTask(dir,"worker",old),undefined);
+  const claim=await claimNextPcTask(dir,"worker",agents);assert.equal(claim!.toolProfile,"personal");
+  await finishPcTask(dir,manual.id,"worker",claim!.lease!,randomUUID(),{outcome:"needs_input",summary:"Waiting for a permitted tool",needsInput:[],evidence:[],submitted:0});
+  const retry=await retryPcTask(dir,manual.id);assert.equal(retry!.toolProfile,"personal");
+  const scheduled=await enqueuePcTask(dir,"Find support jobs",undefined,new Date(),"Scheduled job","scoped");assert.equal(scheduled.toolProfile,"scoped");
+ }finally{await rm(dir,{recursive:true,force:true});}
+});
 test("Google sync errors persist, back off, and recover without replaying the application",async()=>{
  const dir=await mkdtemp(join(tmpdir(),"jarvis-google-outbox-"));
  try{
