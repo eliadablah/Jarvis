@@ -1,0 +1,142 @@
+/* Jarvis views D and E: Aurora (violet + orange) and Ember (charcoal + orange).
+   dashboard.js sets body[data-theme] only for those two views, so A, B and C keep
+   their own look. Layered over dashboard.css; the "html body[data-theme]" prefix
+   outranks the base rules. */
+
+html body[data-theme] {
+  --t-bg: #150f1f; --t-side: #110b1a; --t-card1: #271c39; --t-card2: #1f1630; --t-line: #3b2c54;
+  --t-tx: #f6f0fc; --t-tx2: #cdbfe0; --t-mu: #a596bd; --t-dim: #7d6e96;
+  --t-a1: #ff9a3c; --t-a2: #a45cff; --t-ok: #5fe3b5; --t-on: #1a1424;
+  --bg: var(--t-bg); --surface: var(--t-card2); --surface2: var(--t-card1); --line: var(--t-line);
+  --mint: var(--t-a1); --muted: var(--t-mu); --gold: var(--t-a1);
+  background: radial-gradient(900px 520px at 78% -8%, color-mix(in srgb, var(--t-a2) 22%, transparent), transparent 60%),
+              radial-gradient(700px 480px at 6% 108%, color-mix(in srgb, var(--t-a1) 14%, transparent), transparent 60%), var(--t-bg);
+  background-attachment: fixed;
+  color: var(--t-tx);
+}
+html body[data-theme="ember"] {
+  --t-bg: #131417; --t-side: #0f1012; --t-card1: #232428; --t-card2: #1c1d21; --t-line: #33343a;
+  --t-tx: #f3ede7; --t-tx2: #cfc6bd; --t-mu: #8e8b87; --t-dim: #6d6b68;
+  --t-a1: #f59e2b; --t-a2: #ff6a2b; --t-ok: #2fd7a0; --t-on: #17181b;
+  background: radial-gradient(900px 520px at 80% -10%, color-mix(in srgb, var(--t-a2) 12%, transparent), transparent 60%), var(--t-bg);
+}
+
+html body[data-theme] {
+  .sidebar { background: var(--t-side); border-color: var(--t-line); }
+  .brand, .brand-mark span { color: var(--t-tx); }
+  .brand small { color: var(--t-mu); }
+  .brand-mark { background: color-mix(in srgb, var(--t-a2) 28%, var(--t-card2)); color: var(--t-a1); border-color: color-mix(in srgb, var(--t-a2) 55%, transparent); box-shadow: 0 0 24px color-mix(in srgb, var(--t-a2) 30%, transparent); }
+  .nav-item { color: var(--t-mu); }
+  .nav-item:hover { color: var(--t-tx); background: color-mix(in srgb, var(--t-a2) 14%, transparent); }
+  .nav-item.active { color: var(--t-tx); background: linear-gradient(100deg, color-mix(in srgb, var(--t-a2) 30%, transparent), color-mix(in srgb, var(--t-a1) 14%, transparent)); border-color: color-mix(in srgb, var(--t-a2) 45%, transparent); }
+  .nav-item.active:before { background: var(--t-a1); }
+  .nav-item .count, .nav-item b { background: color-mix(in srgb, var(--t-a2) 32%, transparent); color: var(--t-tx); }
+  .nav-section, .nav-label, .workspace-label, .eyebrow, .mini-label { color: var(--t-dim); }
+  .sidebar-bottom, .companion-foot, .brief-transcript, .card-foot { border-color: var(--t-line); }
+  .profile span small, .profile small, .private-note small { color: var(--t-mu); }
+  .private-note, .private-note>.icon { color: var(--t-tx2); }
+  .avatar { background: linear-gradient(135deg, var(--t-a1), var(--t-a2)); color: var(--t-on); }
+  .profile-dot, .status-dot, .preview-tag i { background: var(--t-ok); box-shadow: 0 0 8px color-mix(in srgb, var(--t-ok) 55%, transparent); }
+
+  .breadcrumb, .topline { color: var(--t-mu); }
+  .breadcrumb span { color: var(--t-dim); }
+  .breadcrumb strong { color: var(--t-tx2); }
+  .preview-tag { color: var(--t-tx2); border-color: var(--t-line); background: var(--t-card2); }
+  .page-heading h1 { color: var(--t-tx); }
+  .page-heading h1 span { background: linear-gradient(90deg, var(--t-a1), var(--t-a2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .page-heading p, .card-subtitle, .empty-note, .muted, .main-footer { color: var(--t-mu); }
+  .main-footer span { color: var(--t-dim); }
+
+  .brief-btn, .primary-btn { background: linear-gradient(100deg, var(--t-a1), var(--t-a2)); color: var(--t-on); border-color: transparent; box-shadow: 0 6px 22px color-mix(in srgb, var(--t-a2) 28%, transparent); }
+  .brief-btn:hover, .primary-btn:hover { background: linear-gradient(100deg, var(--t-a1), var(--t-a2)); filter: brightness(1.1); transform: translateY(-1px); }
+  .icon-btn, .secondary-btn { background: var(--t-card2); border-color: var(--t-line); color: var(--t-tx2); }
+  .text-btn { color: var(--t-a1); }
+  .text-btn:hover { color: var(--t-tx); }
+  button:focus-visible, a:focus-visible, select:focus-visible { outline-color: var(--t-a1); }
+
+  .stat, .card { background: linear-gradient(135deg, var(--t-card1), var(--t-card2)); border-color: var(--t-line); box-shadow: 0 10px 30px rgba(0, 0, 0, .28); }
+  .stat-label, .stat-value small, .stat-value span, .stat-note, .card-head .eyebrow, .card-head h2>span { color: var(--t-mu); }
+  .stat-value, .card-head h2, .card-title, .money-total, .orb-caption h2, .modal h2, .modal h3 { color: var(--t-tx); }
+  .stat-note.green, .stat-note.gold { color: var(--t-a1); }
+  .money-total span, .money-note, .money-caption { color: var(--t-mu); }
+  .card-head>.icon, .stat-label .icon { color: var(--t-a1); opacity: .9; }
+
+  .tag { color: var(--t-tx2); background: color-mix(in srgb, var(--t-a2) 18%, transparent); border-color: color-mix(in srgb, var(--t-a2) 38%, transparent); }
+  .tag.gold { color: var(--t-a1); background: color-mix(in srgb, var(--t-a1) 14%, transparent); border-color: color-mix(in srgb, var(--t-a1) 40%, transparent); }
+  .tag.green { color: var(--t-ok); background: color-mix(in srgb, var(--t-ok) 12%, transparent); border-color: color-mix(in srgb, var(--t-ok) 38%, transparent); }
+
+  .task-row, .bill-row { border-color: var(--t-line); }
+  .task-title, .bill-copy strong, .bill-copy, .job-preview strong, .schedule-title, .career-copy strong { color: var(--t-tx); }
+  .task-meta, .task-meta>span, .bill-copy small, .bill-amount small, .job-preview small, .schedule-meta, .schedule-time, .schedule-time small, .career-copy p, .pipeline-step span, .pipeline-step small { color: var(--t-mu); }
+  .bill-amount { color: var(--t-tx2); }
+  .task-check { border-color: color-mix(in srgb, var(--t-a2) 60%, transparent); }
+  .task-check:hover { border-color: var(--t-a1); background: color-mix(in srgb, var(--t-a1) 25%, transparent); }
+  .task-done .task-check { background: var(--t-ok); border-color: var(--t-ok); }
+  .task-done .task-title { color: var(--t-dim); }
+  .task-row.focused { background: color-mix(in srgb, var(--t-a2) 22%, transparent); }
+  .priority-dot { background: var(--t-a1); }
+  .task-progress, .card .progress-bar { background: var(--t-line); }
+  .task-progress span, .card .progress-bar span { background: linear-gradient(90deg, var(--t-a2), var(--t-a1)); }
+
+  .bar { background: linear-gradient(0deg, color-mix(in srgb, var(--t-a2) 70%, transparent), color-mix(in srgb, var(--t-a1) 70%, transparent)); }
+  .bar.accent, .bar:last-child { background: linear-gradient(0deg, var(--t-a2), var(--t-a1)); }
+  .bar span { color: var(--t-dim); }
+  .money-chart { border-color: var(--t-line); }
+  .bill-icon, .company-icon, .career-icon { background: color-mix(in srgb, var(--t-a2) 22%, var(--t-card2)); border-color: color-mix(in srgb, var(--t-a2) 40%, transparent); color: var(--t-a1); }
+  .career-banner, .insight { background: linear-gradient(110deg, color-mix(in srgb, var(--t-a2) 24%, var(--t-card2)), color-mix(in srgb, var(--t-a1) 12%, var(--t-card2))); border-color: color-mix(in srgb, var(--t-a2) 40%, transparent); }
+  .insight strong, .insight .eyebrow, .insight-icon, .insight .text-btn { color: var(--t-a1); }
+  .insight p { color: var(--t-tx2); }
+  .pipeline, .pipeline-step { border-color: var(--t-line); }
+  .pipeline-step strong { color: var(--t-a1); }
+  .schedule-line:before { background: var(--t-line); }
+  .schedule-line:after { background: var(--t-a1); box-shadow: 0 0 0 3px color-mix(in srgb, var(--t-a1) 22%, transparent); }
+  .schedule-line.gold-line:after { background: var(--t-ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--t-ok) 22%, transparent); }
+
+  .companion { border-color: var(--t-line); background: radial-gradient(ellipse at 50% 24%, color-mix(in srgb, var(--t-a2) 30%, transparent), transparent 46%), var(--t-side); }
+  .companion-top, .companion-top>span:first-child, .companion-top strong { color: var(--t-tx2); }
+  .companion-top small, .companion-top #jarvis-state, .orb-caption .eyebrow, .connections>.eyebrow { color: var(--t-mu); }
+  .orb { background: radial-gradient(circle, color-mix(in srgb, var(--t-a2) 24%, transparent) 0, color-mix(in srgb, var(--t-a1) 8%, transparent) 43%, transparent 64%); }
+  .orb:before, .orb:after { border-color: color-mix(in srgb, var(--t-a2) 50%, transparent); }
+  .orb-ring { border-color: color-mix(in srgb, var(--t-a1) 45%, transparent); box-shadow: 0 0 22px color-mix(in srgb, var(--t-a2) 22%, transparent), inset 0 0 17px color-mix(in srgb, var(--t-a2) 18%, transparent); }
+  .orb-core { background: radial-gradient(ellipse at 35% 28%, #ffe2bd, var(--t-a1) 28%, var(--t-a2) 62%, #2b1750 88%); box-shadow: 0 0 34px color-mix(in srgb, var(--t-a1) 40%, transparent), 0 0 70px color-mix(in srgb, var(--t-a2) 34%, transparent), inset -8px -8px 14px rgba(20, 8, 45, .6); }
+  .orb-caption strong, .orb-caption p { color: var(--t-tx2); }
+  .brief-line { color: var(--t-tx2); }
+  .brief-line strong { color: var(--t-tx); }
+  .brief-line.muted { color: var(--t-mu); }
+  .connection-row, .connection-status, .connection-row>.icon, .connection-row small { color: var(--t-mu); }
+  .connection-status.dim { color: var(--t-dim); }
+  .companion-foot { color: var(--t-dim); }
+
+  .command-dock { background: color-mix(in srgb, var(--t-card2) 92%, transparent); border-color: color-mix(in srgb, var(--t-a2) 50%, transparent); box-shadow: 0 -12px 36px rgba(0, 0, 0, .5), 0 8px 28px color-mix(in srgb, var(--t-a2) 22%, transparent); }
+  #command { color: var(--t-tx); }
+  #command::placeholder, .command-tools, .route-chip, .shortcut { color: var(--t-mu); }
+  .shortcut kbd { border-color: var(--t-line); }
+  .mic-btn { background: color-mix(in srgb, var(--t-a2) 24%, transparent); border-color: color-mix(in srgb, var(--t-a2) 45%, transparent); color: var(--t-tx); }
+  .mic-btn:hover { background: color-mix(in srgb, var(--t-a2) 40%, transparent); }
+  .mic-btn.active { background: var(--t-a1); color: var(--t-on); }
+  .send-btn { background: linear-gradient(135deg, var(--t-a1), var(--t-a2)); border-color: transparent; color: var(--t-on); }
+  .send-btn:hover { background: linear-gradient(135deg, var(--t-a1), var(--t-a2)); filter: brightness(1.12); }
+  .mode-select { background: color-mix(in srgb, var(--t-a2) 22%, transparent); border-color: color-mix(in srgb, var(--t-a2) 40%, transparent); color: var(--t-tx2); }
+  .mode-select select { color: var(--t-tx2); }
+  .mode-select select option { background: var(--t-card2); color: var(--t-tx); }
+
+  .toast { background: var(--t-card1); color: var(--t-tx); border-color: color-mix(in srgb, var(--t-a1) 50%, transparent); }
+  .modal-backdrop { background: color-mix(in srgb, var(--t-bg) 82%, transparent); }
+  .modal { background: var(--t-card1); border-color: color-mix(in srgb, var(--t-a2) 50%, transparent); }
+  .modal p, .modal label, .modal p.modal-note { color: var(--t-mu); }
+  .modal input, .modal select { background: var(--t-card2); border-color: var(--t-line); color: var(--t-tx); }
+  .review-grid>div { background: var(--t-card2); border-color: var(--t-line); }
+  .review-grid small { color: var(--t-mu); }
+  .review-grid strong { color: var(--t-tx); }
+  .routing-option { border-color: var(--t-line); }
+  .routing-option>strong { color: var(--t-tx); }
+
+  .design-switch { background: var(--t-card2); border-color: var(--t-line); }
+  .design-switch a { color: var(--t-mu); }
+  .design-switch a:hover { color: var(--t-a1); background: var(--t-card1); }
+  .design-switch a.selected, .design-switch a.selected:hover { background: linear-gradient(135deg, var(--t-a1), var(--t-a2)); color: var(--t-on); }
+
+  ::selection { background: var(--t-a2); color: #fff; }
+  ::-webkit-scrollbar-thumb { background: var(--t-line); }
+}
+

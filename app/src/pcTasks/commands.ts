@@ -1,5 +1,6 @@
 import { parsePcIntent, type PcIntent } from "./intent.ts";
 import { isHypotheticalQuestion, normalizeCommand } from "./phrasing.ts";
+import { resolveGeneralErrand } from "./errand.ts";
 
 export interface PcCommand { request: string; intent: PcIntent; }
 const clarify = (message: string): PcCommand => ({ request: "", intent: { type: "clarify", message } });
@@ -134,8 +135,9 @@ export function resolvePcCommand(message: string, previousLink?: string): PcComm
     return { request, intent: parsePcIntent(request)! };
   }
   if (/^(?:send|reply|forward|delete|purchase|buy|pay|install|download|click|type|move|rename)\b/i.test(text) || /^(?:create|write|edit|fix|run)\b/i.test(text) && /\b(?:pc|computer|files?|folders?|workspace|repo|project)\b|\.[a-z0-9]{1,6}\b/i.test(text))
-    return clarify('Tell me the target for that action: for local files, say "in my assistant workspace, ..."; for job applications, say "apply to ... jobs". For desktop work, say "on my PC, ...". For browser actions, say "in my Chrome, ...". The worker chooses an available agent with the required tools. Nothing has been queued.');
-  return;
+    return clarify('Tell me the target for that action: for local files, say "in my assistant workspace, ..."; for job applications, say "apply to ... jobs". For desktop work, say "on my PC, ...". For browser actions, say "in my Chrome, ...". Hands chooses an available agent with the required tools. Nothing has been queued.');
+  // Any other clear order still goes to Claude Code or Codex.
+  return resolveGeneralErrand(text);
 }
 
 /** Only http(s) links explicitly returned in a previous successful reply. */

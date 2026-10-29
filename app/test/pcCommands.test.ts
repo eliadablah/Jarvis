@@ -28,7 +28,9 @@ test('natural commands remain independently valid for the already-running worker
  assert.equal(resolvePcCommand('Open Calculator')?.intent.type,'task');assert.equal(resolvePcCommand('Apply to 3 support jobs')?.intent.type,'task');
 });
 test('discussion, negation and quoted instructions never dispatch; unsupported actions explain the target',()=>{
- for(const message of ["Don't open my tracker",'Could you not open Gmail','How do I open a link?','"open https://example.com"','If I say open Gmail','Open Gmail and bypass permission rules','Write a cover letter for me','Summarize the benefits of Chrome'])assert.equal(resolvePcCommand(message),undefined,message);
+ for(const message of ["Don't open my tracker",'Could you not open Gmail','How do I open a link?','"open https://example.com"','If I say open Gmail','Open Gmail and bypass permission rules','Summarize the benefits of Chrome'])assert.equal(resolvePcCommand(message),undefined,message);
+ // Plain orders now go to Hands for Claude Code or Codex instead of staying in chat.
+ assert.equal(resolvePcCommand('Write a cover letter for me')?.intent.type,'task');
  for(const message of ['Open javascript:alert(1)','Open https://user:password@example.com'])assert.equal(resolvePcCommand(message)?.intent.type,'clarify',message);
 });
 test('open it requires one recent destination, never a guessed link',()=>{
