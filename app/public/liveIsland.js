@@ -6,7 +6,9 @@
 // "jarvis:pc-state" event (live updates push a refresh within a second or two).
 // describeProgress is pure so it can be tested without a browser.
 
-const REQUEST_PREFIX = /^(?:on my (?:pc|computer)|in my (?:chrome|browser)),?\s+execute this task:\s*/i;
+import { createScreenView } from './screenView.js';
+
+const REQUEST_PREFIX =/^(?:on my (?:pc|computer)|in my (?:chrome|browser)),?\s+execute this task:\s*/i;
 const ACTIVE = ['running', 'cancelling'];
 
 /** A plain-language summary of one task: title, step number, progress ratio (null if unknown). */
@@ -43,7 +45,11 @@ export function mountLiveIsland({ safe, api, toast, navigate }) {
   if (!host) return { render() {} };
   const island = document.createElement('section');
   island.className = 'live-island'; island.hidden = true;
-  island.setAttribute('aria-live', 'polite');
+  // The text part is redrawn on every update; the screen viewer stays put so a playing video isn't interrupted.
+  const main = document.createElement('div');
+  main.className = 'island-main'; main.setAttribute('aria-live', 'polite');
+  const screen = createScreenView({ api, toast });
+  island.append(main, screen.el);
   host.before(island);
   let tasks = [];
   let openByTap = false;
@@ -52,6 +58,8 @@ export function mountLiveIsland({ safe, api, toast, navigate }) {
     const active = tasks.filter(t => ACTIVE.includes(t.status));
     const queued = tasks.filter(t => t.status === 'queued');
     const current = active[0];
+    // Watching only makes sense while Hands is actually working; stop recording the moment it isn't.
+    if (!current && screen.mode() !== 'off') screen.setMode('off');
     if (!current && !queued.length) { island.hidden = true; return; }
     island.hidden = false;
     const info = current ? describeProgress(current) : null;
@@ -74,15 +82,16 @@ export function mountLiveIsland({ safe, api, toast, navigate }) {
 <div class="island-body" id="island-body"><div class="island-inner">
 ${current ? `<p class="island-now">${safe(info.waiting ? 'Paused: it needs your answer in PC activity.' : info.now)}</p>${bar}<p class="island-meta">${metaBits}</p>${steps ? `<ul class="island-steps">${steps}</ul>` : ''}` : ''}
 ${upNext ? `<p class="island-label">Up next</p><ul class="island-queue">${upNext}</ul>` : ''}
-<div class="island-actions"><button class="text-btn" data-island="open" type="button">${info?.waiting ? 'Answer now' : 'Open details'}</button>${current ? '<button class="text-btn" data-island="cancel" type="button">Stop</button>' : ''}</div>
+<div class="island-actions"><button class="text-btn" data-island="open" type="button">${info?.waiting ? 'Answer now' : 'Open details'}</button>${current ? `<button class="text-btn" data-island="watch" type="button">${screen.mode() === 'off' ? 'Watch live' : 'Hide screen'}</button><button class="text-btn" data-island="cancel" type="button">Stop</button>` : ''}</div>
 </div></div>`;
-    if (island.dataset.html !== html) { island.innerHTML = html; island.dataset.html = html; }
-    island.classList.toggle('open', openByTap || info?.waiting === true);
+    if (main.dataset.html !== html) { main.innerHTML = html; main.dataset.html = html; }
+    island.classList.toggle('open', openByTap || info?.waiting === true || screen.mode() !== 'off');
   }
 
   island.addEventListener('click', async event => {
     const action = event.target.closest('[data-island]')?.dataset.island;
     if (action === 'open') { navigate('pc'); return; }
+    if (action === 'watch') { screen.setMode(screen.mode() === 'off' ? 'video' : 'off'); render(); return; }
     if (action === 'cancel') {
       const current = tasks.find(t => ACTIVE.includes(t.status));
       if (!current) return;

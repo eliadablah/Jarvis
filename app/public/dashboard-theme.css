@@ -39,6 +39,17 @@
 .island-label { margin: 14px 0 0; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted, #86958c); }
 .island-queue li { font-size: 13px; color: var(--muted, #86958c); }
 .island-actions { display: flex; gap: 16px; padding: 12px 0 14px; }
+/* Live screen viewer inside the island */
+.island-screen { padding: 0 18px 16px; }
+.island-screen[hidden], .screen-stage video[hidden], .screen-stage img[hidden] { display: none; }
+.screen-bar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 12px; margin: 4px 0 10px; }
+.screen-tabs { display: inline-flex; gap: 2px; padding: 3px; border-radius: 999px; background: color-mix(in srgb, var(--muted, #86958c) 16%, transparent); }
+.screen-tabs button { border: 0; border-radius: 999px; padding: 5px 12px; font-size: 13px; color: inherit; background: transparent; transition: background .25s, color .25s; }
+.screen-tabs button.on { background: var(--mint, #b8eccb); color: #17131f; }
+.screen-tabs em { margin-left: 4px; font-size: 10px; font-style: normal; letter-spacing: .05em; text-transform: uppercase; opacity: .75; }
+.screen-status { font-size: 12px; color: var(--muted, #86958c); }
+.screen-stage { position: relative; aspect-ratio: 16 / 9; overflow: hidden; border: 1px solid var(--line, #29352f); border-radius: 16px; background: #000; }
+.screen-stage video, .screen-stage img { display: block; width: 100%; height: 100%; object-fit: contain; }
 @keyframes island-spin { to { transform: rotate(360deg); } }
 @keyframes island-slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(300%); } }
 @keyframes island-pulse { 50% { transform: scale(1.5); opacity: .55; } }
@@ -194,6 +205,11 @@ html body[data-theme] {
   .island-bar i { background: linear-gradient(90deg, var(--t-a2), var(--t-a1)); }
   .island-steps li.now i { background: var(--t-a1); }
   .island-steps li i { background: rgba(255, 255, 255, .25); }
+  .screen-tabs { background: rgba(255, 255, 255, .1); }
+  .screen-tabs button { color: var(--t-tx2); }
+  .screen-tabs button.on { background: rgba(255, 255, 255, .92); color: #15101f; box-shadow: 0 2px 8px rgba(0, 0, 0, .35); }
+  .screen-status { color: var(--t-mu); }
+  .screen-stage { border: .5px solid var(--t-line); border-radius: 18px; }
 
   /* --- Priority order: to-dos, queue, money, jobs, reminders, schedule --- */
   .dashboard-grid:not(.single-view) { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; align-items: stretch; }

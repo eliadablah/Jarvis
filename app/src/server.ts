@@ -20,6 +20,7 @@ import { startScheduler } from "./schedules/morning.ts";
 import {handleLive,closeLiveClients} from "./live.ts";
 import { handleNews } from "./news/api.ts";
 import { handleLearn } from "./learn/api.ts";
+import { handleScreen } from "./screen/api.ts";
 
 const config = loadConfig();
 let stopTrackerUpdates = () => {};
@@ -56,6 +57,12 @@ const server = createServer((req, res) => {
     return;
   }
 
+  // --- Live screen view (video or screenshots of the PC while Hands works) ---
+  if (path.startsWith("/api/pc/screen/")) {
+    handleScreen(req, res, path, config).catch(() => { if (!res.headersSent) res.writeHead(500); res.end(); });
+    return;
+  }
+
   // --- PC errands (job applying runs on my PC, see pc-worker/) ---
   if (path.startsWith("/api/pc/")) {
     handlePcTasks(req, res, path, config).catch(() => { if (!res.headersSent) res.writeHead(500); res.end(); });
@@ -87,6 +94,10 @@ const server = createServer((req, res) => {
   });
   res.end(method === "HEAD" ? undefined : response.body);
 });
+
+// The live video from Hands is one long upload, which Node's default 5-minute request limit would cut off.
+// The server is only reachable on the tailnet, and the other endpoints are small.
+server.requestTimeout = 0;
 
 server.listen(config.port, () => {
   console.log(`jarvis-web listening on :${config.port} (env=${config.env}, version=${config.version})`);

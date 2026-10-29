@@ -9,6 +9,7 @@ import { parsePcIntent } from "../app/src/pcTasks/intent.ts";
 import { agentStatuses, chooseAgents, canFallback, canResumeWorkspace, runAgent, type ClaimedTask, type WorkerSettings } from "./agents.ts";
 import { codexSessionDirs, newerLimits, probeClaudeLimits, readCodexLimits } from "./limits.ts";
 import { readState, saveState, acquireWorkerLock, type LocalState } from "./persistence.ts";
+import { startLiveView } from "./liveView.ts";
 export { jobPrompt } from "./agents.ts";
 const STATE_DIR = join(homedir(), ".jarvis");
 const POLL_MS = 15_000;
@@ -83,7 +84,7 @@ async function refreshLimits(settings: WorkerSettings, idle: boolean): Promise<v
   }
 }
 export async function execute(settings: WorkerSettings, state: LocalState, task: ClaimedTask, dependencies: {
-  run?: typeof runAgent; persist?: typeof saveState; refresh?: typeof refreshLimits; heartbeatMs?: number;
+  run?: typeof runAgent; persist?: typeof saveState; refresh?: typeof refreshLimits; heartbeatMs?: number; live?: typeof startLiveView;
 } = {}): Promise<PcReport> {
   const launch = dependencies.run ?? runAgent, persist = dependencies.persist ?? saveState;
   const refresh = dependencies.refresh ?? refreshLimits;
@@ -104,6 +105,9 @@ export async function execute(settings: WorkerSettings, state: LocalState, task:
     } catch { if (Date.now() - lastContact > 60_000) controller.abort("connection_lost"); }
   };
   await heartbeat();
+  // The dashboard's live view (video or screenshots) runs only while this task does, and only when someone is watching.
+  let stopLive = () => {};
+  try { stopLive = (dependencies.live ?? startLiveView)(settings); } catch { /* the live view is optional */ }
   const pump = (async () => { while (!finished && !controller.signal.aborted) { await sleep(dependencies.heartbeatMs ?? HEARTBEAT_MS); if (!finished) { await refresh(settings, false).catch(() => {}); await heartbeat(); } } })();
   try {
     let result = emptyReport("needs_input", "No available agent has this task's tools.");
@@ -147,7 +151,7 @@ export async function execute(settings: WorkerSettings, state: LocalState, task:
       controller.signal.reason === "cancel_requested" ? "PC confirmed the agent stopped. Already completed actions may remain; review before retrying." :
       "Stopped after losing the server connection or task ownership. Some actions may already have happened; review before retrying.");
     return result;
-  } finally { finished = true; await pump; }
+  } finally { finished = true; stopLive(); await pump; }
 }
 async function main(): Promise<void> {
   await mkdir(STATE_DIR, { recursive: true, mode: 0o700 });

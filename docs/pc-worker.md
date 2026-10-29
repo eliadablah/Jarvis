@@ -75,6 +75,15 @@ The helper installs pinned windows-mcp 0.8.8 with a private Python 3.14 runtime 
 
 Source and license: [Windows-MCP](https://github.com/CursorTouch/Windows-MCP), MIT. Runtime files stay outside the public repository.
 
+## Live screen view
+
+While a task runs, the dashboard's live island can show the PC screen as live video or as screenshots. Nothing is recorded unless the dashboard asks: every 2 seconds the worker asks the server what is wanted (`/api/pc/screen/control`: off, video or screenshots) and starts or stops accordingly. Closing the dashboard, pressing Hide, or the task ending stops it within a few seconds, and so does losing the server for 10 seconds.
+
+- **Video (recommended):** ffmpeg records the main monitor (found by asking Windows for its size; the whole desktop if that fails) as 10 frames a second of H.264, with a keyframe every second, streamed as fragmented MP4 to `/api/pc/screen/ingest/video`. The server relays it to the browser, which plays it with Media Source Extensions. About 100 KB/s, about one second behind.
+- **Screenshots:** one JPEG every 2 seconds, taken with ffmpeg, or with PowerShell if ffmpeg isn't installed. The dashboard switches to this by itself if video can't start or the browser can't play it.
+- **Privacy:** the server keeps only the newest screenshot and the video start in memory, never on disk; they are dropped when the viewer leaves or the PC stops sending. Only the logged-in dashboard on the tailnet can read them, and only the worker token can upload.
+- **ffmpeg:** the worker looks for it in `settings.ffmpegBin`, then `~/.jarvis/live-view.json` (`{"ffmpegBin": "C:\\path\\to\\ffmpeg.exe"}`), then the PATH. Restart an idle worker to pick up the live view code.
+
 ## Checks
 
 From app/: npm run typecheck, npm test, npm run test:pc, npm run build. CI runs both server and worker checks. The Linux image contains server code only; the worker runs on Windows.

@@ -2,6 +2,15 @@
 
 ## 2026-10-28
 
+### Feature - Live screen view: video, with screenshots as the other option
+
+- The live island has Watch live. It plays a live video of the PC screen while Hands works, with a Video (recommended) / Screenshots / Hide switch, and falls back to screenshots by itself if video can't start or the browser can't play it.
+- Hands (`pc-worker/liveView.ts`): while a task runs it asks the server every 2 seconds what the dashboard wants, and records only then. Video is ffmpeg on the main monitor (10 fps H.264, a keyframe each second, fragmented MP4, about 100 KB/s); screenshots are one JPEG every 2 seconds via ffmpeg, or PowerShell without it. Stops within seconds when the viewer leaves, the task ends, or the server is unreachable for 10 seconds. Worker change: one start/stop hook in `execute`.
+- Server (`app/src/screen/`): relays the video as it arrives (an MP4 splitter keeps the start piece so a viewer can join mid-stream) and keeps the newest screenshot; both in memory only, dropped when the viewer leaves. Up to 3 viewers, slow viewers are dropped, uploads need the worker token, the viewer side needs the dashboard's request header. The server's 5-minute request limit is lifted for the long upload.
+- Fixed while measuring: recording the whole 5266 x 2160 desktop only reached about 6 fps with chunks every 1.7 seconds; recording the main monitor gives a steady 10 fps with a chunk every second.
+- Validation: type checks clean; server relay tests with a streamed upload, worker tests with fake processes (including the 10-second connection-loss stop), and the existing 55 worker tests pass. Played a live stream end to end in a browser (0 stalls over 10 seconds, about 1 second behind live), switched between video, screenshots and Hide, and checked the no-video-support fallback. Real recording was checked for format and speed only; the test used ffmpeg's test pattern so no real screen content was captured.
+- Needs: restart idle Hands (`pc-worker/restart.ps1`) once so it loads the new code.
+
 ### Feature - Quiz popup with selectable answers
 
 - Saying or typing "quiz me" (also "test me", "give me a quiz", "ask me a devops question", with an optional "on Kubernetes", "about k8s", "on Network+" and similar) now opens a quiz window instead of sending the phrase to chat, where it only produced a spoken caption. Five multiple-choice questions, a progress bar, instant green/red feedback with the explanation, keys A-D or 1-4 to answer and Enter to continue, and a score screen that reviews every missed question. An unknown subject gets a short reply listing the topics.

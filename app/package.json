@@ -14,7 +14,7 @@
     "test:local": "node --test --test-isolation=none \"test/**/*.test.ts\"",
     "start": "node dist/server.js",
     "dev": "node --watch src/server.ts",
-    "test:pc": "tsc -p tsconfig.pc.json && node --test ../pc-worker/worker.test.ts ../pc-worker/steps.test.ts ../pc-worker/limits.test.ts ../pc-worker/ruflo.test.ts ../pc-worker/jobFiles.test.ts ../pc-worker/providerRouting.test.ts ../pc-worker/submissionOutbox.test.ts ../pc-worker/permissions.test.ts"
+    "test:pc": "tsc -p tsconfig.pc.json && node --test ../pc-worker/worker.test.ts ../pc-worker/steps.test.ts ../pc-worker/limits.test.ts ../pc-worker/ruflo.test.ts ../pc-worker/jobFiles.test.ts ../pc-worker/providerRouting.test.ts ../pc-worker/submissionOutbox.test.ts ../pc-worker/permissions.test.ts ../pc-worker/liveView.test.ts"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
