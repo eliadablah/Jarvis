@@ -3,7 +3,23 @@ import assert from "node:assert/strict";
 import { describeProgress, recentSteps } from "../public/liveIsland.js";
 import { dueLabel, sortReminders, isReminder } from "../public/remindersPanel.js";
 import { ago } from "../public/newsPanel.js";
-import { scoreLine } from "../public/learnPanel.js";
+import { scoreLine, parseQuizCommand } from "../public/quizModal.js";
+
+test("quiz commands open a quiz, with an optional topic, and ordinary chat does not", () => {
+  for (const phrase of ["quiz me", "Quiz me!", "Jarvis, quiz me", "can you quiz me", "test me", "give me a quiz", "start a quick quiz", "ask me a devops question", "go ahead and quiz me please"])
+    assert.deepEqual(parseQuizCommand(phrase), { topic: null }, phrase);
+  assert.deepEqual(parseQuizCommand("quiz me on kubernetes"), { topic: "Kubernetes" });
+  assert.deepEqual(parseQuizCommand("Jarvis quiz me about k8s"), { topic: "Kubernetes" });
+  assert.deepEqual(parseQuizCommand("quiz me on Network+"), { topic: "Networking" });
+  assert.deepEqual(parseQuizCommand("test me on terraform"), { topic: "Terraform" });
+  assert.deepEqual(parseQuizCommand("quiz me on docker containers"), { topic: "Docker" });
+  assert.deepEqual(parseQuizCommand("quiz me on github actions"), { topic: "CI/CD" });
+  assert.deepEqual(parseQuizCommand("quiz me on AWS"), { topic: "AWS" });
+  assert.deepEqual(parseQuizCommand("quiz me on cooking"), { unknown: "cooking" });
+  for (const phrase of ["what is a quiz", "I took a quiz yesterday", "add task study for quiz", "open my tasks", "fix the quiz bug", "", "quiz"])
+    assert.equal(parseQuizCommand(phrase), null, phrase);
+  assert.equal(parseQuizCommand(42), null);
+});
 
 test("news ages read naturally and quiz scores come with a comment", () => {
   const now = Date.parse("2026-10-28T20:00:00Z");

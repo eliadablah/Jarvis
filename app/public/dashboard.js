@@ -7,6 +7,7 @@ import { mountPcOffer, splitPcOffer } from './pcOffer.js';
 import { mountLiveIsland } from './liveIsland.js';
 import { mountReminders, isReminder } from './remindersPanel.js';
 import { mountLearn } from './learnPanel.js';
+import { openQuiz, parseQuizCommand, QUIZ_TOPICS } from './quizModal.js';
 import { mountNews } from './newsPanel.js';
 import { scheduledDesign, parseViewCommand } from './viewSchedule.js';
 import { HoldToTalk, speechInSupported } from './speechIn.js';
@@ -134,7 +135,7 @@ async function chat(message,source='typed'){
     p.textContent=answer?`${splitPcOffer(answer).text}\n${e.message}`:e.message;speak(e.message);
   }finally{reader?.releaseLock();busy=false;$('#jarvis-state').textContent='Standing by';void refreshRouting();}
 }
-async function command(text,source='typed'){if(/^(?:open|show)(?: my)? (?:pc|computer) (?:activity|tasks)[.!]?$/i.test(text)){pcActivity.open();return;}const view=parseViewCommand(text);if(view){setDesign(view.mode==='auto'?'auto':view.design,true,true);return;}const added=text.match(/^(?:jarvis[, ]+)?(?:add|create)(?: a)?(?: new)? (?:task|to.?do)(?: called| to)?[ :]+(.+)$/i);if(added){try{await addTask(added[1]);}catch(e){say(e.message);}return;}if(/^(?:jarvis[, ]+)?(?:open dashboard|brief me|show (?:my )?day|overview)[.!]?$/i.test(text)){brief();return;}if(/^(?:open|show)(?: my)? (?:tasks|to.?do(?: list)?|priorities)[.!]?$/i.test(text)){navigate('tasks');say(`You have ${tasks.filter(t=>!t.done).length} tasks waiting. ${tasks.filter(t=>!t.done).map(t=>t.title).join('. ')}`);return;}const complete=text.match(/^(?:complete|finish|mark (?:task )?)(.+?)(?: complete| done)?$/i);if(complete){const name=complete[1].trim().toLowerCase();const matches=tasks.filter(t=>!t.done&&t.title.toLowerCase()===name);if(matches.length===1){try{tasks=(await api(`/api/dashboard/tasks/${matches[0].id}`,'PATCH',{done:true})).tasks;renderTasks();confirmAction('Task completed and saved.');}catch(e){say(e.message);}return;}}await chat(text,source);}
+async function command(text,source='typed'){if(/^(?:open|show)(?: my)? (?:pc|computer) (?:activity|tasks)[.!]?$/i.test(text)){pcActivity.open();return;}const quizCmd=parseQuizCommand(text);if(quizCmd){if(quizCmd.unknown)say(`I don’t have ${quizCmd.unknown} questions yet. I can quiz you on ${QUIZ_TOPICS.join(', ')}.`);else openQuiz({api,safe,modal,toast,topic:quizCmd.topic});return;}const view=parseViewCommand(text);if(view){setDesign(view.mode==='auto'?'auto':view.design,true,true);return;}const added=text.match(/^(?:jarvis[, ]+)?(?:add|create)(?: a)?(?: new)? (?:task|to.?do)(?: called| to)?[ :]+(.+)$/i);if(added){try{await addTask(added[1]);}catch(e){say(e.message);}return;}if(/^(?:jarvis[, ]+)?(?:open dashboard|brief me|show (?:my )?day|overview)[.!]?$/i.test(text)){brief();return;}if(/^(?:open|show)(?: my)? (?:tasks|to.?do(?: list)?|priorities)[.!]?$/i.test(text)){navigate('tasks');say(`You have ${tasks.filter(t=>!t.done).length} tasks waiting. ${tasks.filter(t=>!t.done).map(t=>t.title).join('. ')}`);return;}const complete=text.match(/^(?:complete|finish|mark (?:task )?)(.+?)(?: complete| done)?$/i);if(complete){const name=complete[1].trim().toLowerCase();const matches=tasks.filter(t=>!t.done&&t.title.toLowerCase()===name);if(matches.length===1){try{tasks=(await api(`/api/dashboard/tasks/${matches[0].id}`,'PATCH',{done:true})).tasks;renderTasks();confirmAction('Task completed and saved.');}catch(e){say(e.message);}return;}}await chat(text,source);}
 $('#command-form').onsubmit=e=>{e.preventDefault();const text=$('#command').value.trim();if(text){$('#command').value='';command(text);}};
 $('#mode').onchange=e=>{routeMode=e.target.value;$('#route-chip').textContent=routeMode==='auto'?'Auto · available engine':routeMode;};
 $('.brand').onclick=e=>{e.preventDefault();navigate('dashboard');};document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>navigate(b.dataset.view));$('#brief').onclick=brief;
@@ -169,7 +170,7 @@ const pcActivity=mountPcActivity({api,safe,modal,toast,navigate});
 mountLiveIsland({safe,api,toast,navigate});
 reminders=mountReminders({api,safe,modal,toast,icon,getTasks:()=>tasks,setTasks:next=>{tasks=next;},onChange:()=>renderTasks()});
 reminders.render();
-mountLearn({api,safe,toast});
+mountLearn({api,safe,toast,modal});
 mountNews({api,safe,icon});
 startJobsPanel();
 startSchedulePanel();

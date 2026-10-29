@@ -14,7 +14,7 @@ import { ChatRequestError, checkRequestSource, readBody } from "../api/chatReque
 import { dashboardDir } from "../dashboard.ts";
 import { appHeaders } from "../http/securityHeaders.ts";
 import { buildQuiz, dayKey, pickDaily, summarize, streakOf, type AnswerRecord } from "./engine.ts";
-import { publicQuestion, questionById } from "./questions.ts";
+import { QUESTIONS, TOPICS, publicQuestion, questionById } from "./questions.ts";
 
 interface LearnState { answers: AnswerRecord[]; daily?: { day: string; id: string }; }
 const MAX_HISTORY = 2000;
@@ -85,8 +85,12 @@ export async function handleLearn(req: IncomingMessage, res: ServerResponse, pat
   try {
     if (path === "/api/learn" && (method === "GET" || method === "HEAD")) { send(200, await todayView(dir, tz)); return; }
     if (path === "/api/learn/quiz" && (method === "GET" || method === "HEAD")) {
+      // Optional ?topic=Docker narrows the round to one topic.
+      const asked = new URL(req.url ?? "/", "http://localhost").searchParams.get("topic");
+      const topic = asked ? TOPICS.find(t => t.toLowerCase() === asked.toLowerCase()) : undefined;
+      if (asked && !topic) throw new ChatRequestError(400, `I don't have questions on that yet. Topics: ${TOPICS.join(", ")}.`);
       const state = await readState(dir);
-      send(200, { questions: buildQuiz(state.answers).map(publicQuestion) }); return;
+      send(200, { topic: topic ?? null, questions: buildQuiz(state.answers, 5, Math.random, topic ? QUESTIONS.filter(q => q.topic === topic) : QUESTIONS).map(publicQuestion) }); return;
     }
     if (path === "/api/learn/answer" && method === "POST") {
       checkRequestSource(req.headers);

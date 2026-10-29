@@ -2,6 +2,13 @@
 
 ## 2026-10-28
 
+### Feature - Quiz popup with selectable answers
+
+- Saying or typing "quiz me" (also "test me", "give me a quiz", "ask me a devops question", with an optional "on Kubernetes", "about k8s", "on Network+" and similar) now opens a quiz window instead of sending the phrase to chat, where it only produced a spoken caption. Five multiple-choice questions, a progress bar, instant green/red feedback with the explanation, keys A-D or 1-4 to answer and Enter to continue, and a score screen that reviews every missed question. An unknown subject gets a short reply listing the topics.
+- `GET /api/learn/quiz?topic=` narrows a round to one topic (unknown topics are refused with the list). The Learn card's "Quiz me" button and its topic chips open the same popup; finishing a round updates the card's streak and counts.
+- Fix: in views D and E the right and wrong answer colors were being overridden by the theme.
+- Validation: type checks clean; 157 tests pass (phrase matching including things that must not open a quiz, topic-only rounds); played a full round by keyboard in a browser in both D and E.
+
 ### Feature - Daily DevOps teacher and tech news
 
 - New DevOps teacher card and sidebar entry (Learn). One multiple-choice question a day with an explanation after you answer, a streak, topic progress, and a "Quiz me" five-question practice round. The bank (`learn/questions.ts`) has 57 questions across Networking (Network+), Linux, Git, Docker, Kubernetes, CI/CD, Terraform and AWS. The daily question rotates through the topics you've practised least, and a missed question returns after two days. History is saved on the server (`learn.json`) and days are counted in the morning-run time zone. The answer and explanation are never sent to the browser until you have answered; answering the daily twice keeps the first answer.

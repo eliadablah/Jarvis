@@ -62,6 +62,15 @@ test("a quiz has five questions from different topics and prefers questions you 
   assert.equal(summarize([rec("net-01", true, "2026-10-28")], "2026-10-28").byTopic[0]!.correct, 1);
 });
 
+test("a topic quiz only asks that topic, and a topic with fewer questions than five still works", () => {
+  const k8s = QUESTIONS.filter(q => q.topic === "Kubernetes");
+  const quiz = buildQuiz([], 5, () => 0.3, k8s);
+  assert.equal(quiz.length, 5);
+  assert.ok(quiz.every(q => q.topic === "Kubernetes"));
+  assert.equal(new Set(quiz.map(q => q.id)).size, 5);
+  assert.equal(buildQuiz([], 5, () => 0.3, k8s.slice(0, 3)).length, 3);
+});
+
 test("answering: the answer is revealed only after, results are saved, and the daily can't be answered twice", async () => {
   const dir = await mkdtemp(join(tmpdir(), "jarvis-learn-"));
   const now = new Date("2026-10-28T18:00:00Z");
