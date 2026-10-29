@@ -112,6 +112,7 @@ export function mountPcActivity({ api, safe, modal, toast, navigate }) {
         observed.set(task.id, task.status);
       }
       state = next; firstLoad = false;
+      document.dispatchEvent(new CustomEvent('jarvis:pc-state', { detail: state }));
       const trusted=state.toolTrust?.mode==='trusted';
       const trustHtml='<div><strong>'+(trusted?'Jarvis tools are trusted':'Skip repeated tool approvals')+'</strong><p>'+(trusted?'Your saved permission covers connected tools across tasks. Questions and system permission requests still pause.':'Allow your configured tools for current and future requests, instead of approving each file read or browser step.')+'</p></div><button class="'+(trusted?'text-btn':'pc-approval-allow')+'" data-tool-trust="'+(trusted?'ask':'trusted')+'">'+(trusted?'Ask me again':'Always allow Jarvis tools')+'</button>';
       if(trustBox.innerHTML!==trustHtml)trustBox.innerHTML=trustHtml;

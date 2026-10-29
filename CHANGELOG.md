@@ -2,6 +2,15 @@
 
 ## 2026-10-28
 
+### Feature - Apple-style D/E, priority layout, live Hands feed and reminders
+
+- Views D and E are restyled in an Apple-like language: system font stack with large titles, frosted-glass cards, pill buttons, a segmented view switch, and springy motion. Cards and rows lift and open up when hovered (hover-capable devices only; touch keeps everything visible). A, B and C are unchanged.
+- D/E reorder the overview to the priorities: to-dos, queue (Hands activity), money and bills, jobs, reminders, then schedule. The Hands activity card sits beside the to-dos instead of spanning the page.
+- New `liveIsland.js`: a pill at the top of the dashboard in every view. Collapsed it shows what Hands is doing with a progress ring and timer; hovering, focusing or tapping opens the step feed, a progress bar (a real ratio for job applications, a sliding bar otherwise), the queue, and Open/Stop controls. It waits open when a task needs an answer. `pcActivity.js` now announces each refresh as `jarvis:pc-state`; live updates already refresh within seconds.
+- New reminders: tasks tagged `Reminder` with a `remindAt` time (`dashboard.ts`, validated and normalized to UTC). A Reminders card and sidebar entry sort them by time with plain labels (In 24 min, Tomorrow 9:00 AM, Overdue); reminders stay out of the to-do list and its counts. A notice shows once when one comes due while Jarvis is open. There is no background push notification yet.
+- The Schedule card text now describes the five-view rotation.
+- Validation: type checks clean; 140 app tests pass (new tests for reminders, progress description, and time labels); checked D and E in a browser, including hover, the live island with injected task data, and the add-reminder dialog.
+
 ### Feature - Aurora (D) and Ember (E) dashboard views
 
 - New `dashboard-theme.css` restyles the dashboard (sidebar, cards, orb, command dock, modals) as view D, Aurora (violet and orange), and view E, Ember (charcoal and orange). `dashboard.js` sets `body[data-theme]` only for D and E, so A, B and C and their stylesheets are untouched. Spoken commands accept "view d", "aurora" and "ember". The file is in the `copy-assets.mjs` list.

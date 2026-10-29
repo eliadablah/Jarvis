@@ -8,7 +8,8 @@ import { getRoutingStatus } from "./brain/router.ts";
 import { ChatRequestError, checkRequestSource, readBody } from "./api/chatRequest.ts";
 import { appHeaders } from "./http/securityHeaders.ts";
 
-export interface DashboardTask { id: string; title: string; done: boolean; tag: string; createdAt: string; }
+// A reminder is a task tagged "Reminder" with the time it should surface (remindAt, ISO).
+export interface DashboardTask { id: string; title: string; done: boolean; tag: string; createdAt: string; remindAt?: string; }
 interface DashboardState { tasks: DashboardTask[]; }
 const pending = new Map<string, Promise<unknown>>();
 export function dashboardDir(_config: AppConfig): string {
@@ -30,7 +31,13 @@ export async function updateTask(dir: string, action: "add" | "update" | "delete
     if (action === "add") {
       if (typeof input.title !== "string" || !input.title.trim() || input.title.length > 300) throw new ChatRequestError(400, "A task needs a title of 1–300 characters.");
       if (state.tasks.length >= 500) throw new ChatRequestError(400, "Task limit reached.");
-      state.tasks.push({ id: randomUUID(), title: input.title.trim(), done: false, tag: "Personal", createdAt: new Date().toISOString() });
+      let reminder: { tag: string; remindAt: string } | undefined;
+      if (input.remindAt !== undefined) {
+        const when = typeof input.remindAt === "string" ? Date.parse(input.remindAt) : NaN;
+        if (Number.isNaN(when)) throw new ChatRequestError(400, "A reminder needs a valid date and time.");
+        reminder = { tag: "Reminder", remindAt: new Date(when).toISOString() };
+      }
+      state.tasks.push({ id: randomUUID(), title: input.title.trim(), done: false, tag: reminder?.tag ?? "Personal", createdAt: new Date().toISOString(), ...(reminder ? { remindAt: reminder.remindAt } : {}) });
     } else {
       const task = state.tasks.find(task => task.id === id);
       if (!task) throw new ChatRequestError(404, "Task not found.");
