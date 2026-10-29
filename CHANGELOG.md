@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-10-29
+
+### Fix - Stall watchdog for silent agents
+
+- The morning job run sat at "Starting claude-chrome" for over an hour: Claude launched, connected every tool, then produced nothing, and Hands had no check except the 2 hour limit.
+- `pc-worker/agents.ts`: an agent's real output (anything except `system` / `rate_limit_event` bookkeeping lines) resets a quiet timer. After 1 minute of quiet with no tool used, the live view says it hasn't answered. After 5 minutes with no tool used, the agent is stopped and restarted (two attempts) and then the task falls back to the next capable agent. After 20 minutes of quiet once a tool has run, the agent is stopped and the run is reported as needing review, never restarted, because it may have acted. A user cancel still wins.
+- Validation: new `pc-worker/stall.test.ts` (thresholds, which events count as activity, retry and fallback rules). The watchdog's process handling was not exercised against a real silent agent.
+- Needs: restart idle Hands (`pc-worker/restart.ps1`) to load it.
+
+### Feature - Live view records the agent's Chrome window
+
+- `pc-worker/liveView.ts`: the live video and screenshots now show only the topmost visible Google Chrome window whose title doesn't contain "Jarvis", instead of the whole monitor, so the dashboard no longer records itself and other apps and the taskbar stay out. Positions come from a read-only Windows lookup (window class, title, rectangle; trimmed to the desktop, DPI-aware). It re-checks every 10 seconds and restarts the recording when the window moves or resizes; the dashboard reconnects by itself. With no such window it records the main monitor as before. `{"capture": "screen"}` in `~/.jarvis/live-view.json` turns this off.
+- Validation: tests for the window rectangle parsing, negative offsets on a second monitor, the restart rule, the saved setting, recording the window, and following a moved window. Ran the Windows lookup once on this PC: it found a Chrome window on a monitor with negative coordinates and ffmpeg accepted that area (output discarded, nothing viewed). Fixed while testing: the lookup now uses per-monitor DPI awareness, because the old setting returned rectangles ffmpeg rejected on a mixed-scaling multi-monitor desktop. Not yet watched end to end during a real agent run.
+
 ## 2026-10-28
 
 ### Feature - Live screen view: video, with screenshots as the other option

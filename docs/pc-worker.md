@@ -79,7 +79,8 @@ Source and license: [Windows-MCP](https://github.com/CursorTouch/Windows-MCP), M
 
 While a task runs, the dashboard's live island can show the PC screen as live video or as screenshots. Nothing is recorded unless the dashboard asks: every 2 seconds the worker asks the server what is wanted (`/api/pc/screen/control`: off, video or screenshots) and starts or stops accordingly. Closing the dashboard, pressing Hide, or the task ending stops it within a few seconds, and so does losing the server for 10 seconds.
 
-- **Video (recommended):** ffmpeg records the main monitor (found by asking Windows for its size; the whole desktop if that fails) as 10 frames a second of H.264, with a keyframe every second, streamed as fragmented MP4 to `/api/pc/screen/ingest/video`. The server relays it to the browser, which plays it with Media Source Extensions. About 100 KB/s, about one second behind.
+- **What is recorded:** by default just the agent's Google Chrome window. Hands asks Windows for the topmost visible, un-minimized Chrome window whose title doesn't mention Jarvis (so the dashboard never records itself), trims it to the desktop, and records that rectangle. It re-checks every 10 seconds (each lookup takes a couple of seconds of CPU) and restarts the recording if the window moved or was resized (the dashboard reconnects by itself). With no such window it records the main monitor instead. To always record the whole main monitor, put `{"capture": "screen"}` in `~/.jarvis/live-view.json`. Only window positions and titles are read.
+- **Video (recommended):** ffmpeg records that area (the whole desktop if Windows can't say how big the monitor is) as 10 frames a second of H.264, with a keyframe every second, streamed as fragmented MP4 to `/api/pc/screen/ingest/video`. The server relays it to the browser, which plays it with Media Source Extensions. About 100 KB/s, about one second behind.
 - **Screenshots:** one JPEG every 2 seconds, taken with ffmpeg, or with PowerShell if ffmpeg isn't installed. The dashboard switches to this by itself if video can't start or the browser can't play it.
 - **Privacy:** the server keeps only the newest screenshot and the video start in memory, never on disk; they are dropped when the viewer leaves or the PC stops sending. Only the logged-in dashboard on the tailnet can read them, and only the worker token can upload.
 - **ffmpeg:** the worker looks for it in `settings.ffmpegBin`, then `~/.jarvis/live-view.json` (`{"ffmpegBin": "C:\\path\\to\\ffmpeg.exe"}`), then the PATH. Restart an idle worker to pick up the live view code.
@@ -140,6 +141,16 @@ A running task shows that it is working, not just a status word. The PC activity
 ## Windows startup crashes
 
 On this PC, code injected into new processes sometimes crashes them at startup (access violation `0xC0000005` and similar). If an agent dies to one of those crash codes before it has run any tool or produced any result, nothing can have happened yet, so the worker starts it again, up to three attempts, and shows "crashed while starting, trying again" in the live view. A crash after a tool has run is never retried.
+
+## Stalled agents
+
+An agent can start, connect all its tools, and then go silent. Hands now watches for that. Session bookkeeping lines (`system`, `rate_limit_event`) don't count as activity; any real output does.
+
+- **Quiet for 1 minute before any tool has run:** the live view says "hasn't answered yet; still waiting."
+- **Quiet for 5 minutes before any tool has run:** nothing can have happened, so Hands stops that agent and starts it again (two attempts), then offers the task to the next capable agent.
+- **Quiet for 20 minutes after a tool has run:** Hands stops it and reports "went quiet and was stopped. Some actions may already have happened". It is never restarted, because it may have acted.
+
+Before this, a silent agent held the worker until the 2 hour limit.
 
 For local development, `npm run test:local` runs the app tests without a subprocess per test file, which avoids most random launch failures. CI uses the normal `npm test`.
 

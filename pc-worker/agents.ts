@@ -16,9 +16,21 @@ export interface WorkerSettings {
   windowsMcpCommand?: string; chromeMcpPython?: string; maxApplications?: number; codexHome?: string; workspaces?: Record<string, string>; lockPort?: number;
 }
 export interface ClaimedTask { id: string; request: string; plan: PcPlan; workerId: string; lease: string; toolProfile?: ToolProfile; applicationScope?: {rootTaskId:string;requested:number;confirmedUrls:string[];startedAt:string}; }
-export interface AgentRun { report: PcReport; failure?: "quota" | "authentication" | "unavailable"; safeToRetry: boolean; startupCrash?: boolean }
+export interface AgentRun { report: PcReport; failure?: "quota" | "authentication" | "unavailable"; safeToRetry: boolean; startupCrash?: boolean; stalled?: boolean }
 /** Windows crashes some new processes at startup on this PC; before any tool runs, trying again is safe. */
 const STARTUP_ATTEMPTS = 3;
+/** An agent that says nothing is restarted twice at most, then the next agent gets the task. */
+const STALL_ATTEMPTS = 2;
+/** How long an agent may be silent. Before it has used any tool nothing can have happened, so it is restarted sooner. */
+export const STALL_BEFORE_ACTION_MS = 5 * 60_000, STALL_AFTER_ACTION_MS = 20 * 60_000, STALL_NOTICE_MS = 60_000;
+/** Stream lines that only describe the session itself; they don't show the agent is working. */
+const SESSION_EVENTS = new Set(["system", "rate_limit_event", "thread.started", "turn.started"]);
+export function isAgentActivity(eventType: unknown): boolean { return typeof eventType === "string" && !SESSION_EVENTS.has(eventType); }
+/** What to do about an agent that has been silent for quietMs: keep waiting, restart it (nothing was done yet), or stop it. */
+export function stallVerdict(quietMs: number, touchedTools: boolean): "wait" | "restart" | "stop" {
+  if (touchedTools) return quietMs >= STALL_AFTER_ACTION_MS ? "stop" : "wait";
+  return quietMs >= STALL_BEFORE_ACTION_MS ? "restart" : "wait";
+}
 export type Cooldowns = Record<string, { until: number; reason: string }>;
 export function agentStatuses(settings: WorkerSettings, cooldowns: Cooldowns, now = Date.now(), limits: PcLimits = {}): ExecutorStatus[] {
   return [
@@ -53,7 +65,7 @@ export function refusal(text: string): AgentRun["failure"] {
 const denied = (run: AgentRun) => /EACCES|EPERM|access (?:is )?denied|operation not permitted|requires approval|approval.{0,30}(?:denied|never)|managed.{0,20}(?:denied|policy)/i.test(run.report.summary);
 export function canFallback(run: AgentRun): boolean { return Boolean(run.failure && run.safeToRetry && !denied(run)); }
 export function canRetryStartup(run: AgentRun): boolean {
-  return !denied(run) && run.safeToRetry && (run.startupCrash === true || run.failure === "unavailable" && /could not start|crashed|temporarily unavailable|connection (?:reset|timed out)|ECONNRESET|ETIMEDOUT|service unavailable|failed to initialize/i.test(run.report.summary));
+  return !denied(run) && run.safeToRetry && (run.startupCrash === true || run.stalled === true || run.failure === "unavailable" && /could not start|crashed|temporarily unavailable|connection (?:reset|timed out)|ECONNRESET|ETIMEDOUT|service unavailable|failed to initialize/i.test(run.report.summary));
 }
 /** Code-only continuation inspects existing files first; it must never replay a browser submission. */
 export function canResumeWorkspace(plan: PcPlan, run: AgentRun): boolean {
@@ -183,8 +195,9 @@ export async function runAgent(id: string, settings: WorkerSettings, task: Claim
   for (let attempt = 1; ; attempt++) {
     const run = await runAgentOnce(id, settings, task, signal, progress, diagnostic, onLimits, continuation);
     const retryable = canRetryStartup(run);
-    if (!retryable || attempt >= STARTUP_ATTEMPTS || signal.aborted) return run;
-    progress(id + (run.startupCrash ? " crashed while starting on Windows." : " was unavailable before any action.") + " Trying again (" + (attempt + 1) + " of " + STARTUP_ATTEMPTS + ").");
+    const attempts = run.stalled ? STALL_ATTEMPTS : STARTUP_ATTEMPTS;
+    if (!retryable || attempt >= attempts || signal.aborted) return run;
+    progress(id + (run.stalled ? " stopped responding before it did anything." : run.startupCrash ? " crashed while starting on Windows." : " was unavailable before any action.") + " Trying again (" + (attempt + 1) + " of " + attempts + ").");
     await new Promise(resolve => setTimeout(resolve, 1500 * attempt));
   }
 }
@@ -230,6 +243,8 @@ async function runAgentOnce(id: string, settings: WorkerSettings, task: ClaimedT
     const startedAt = Date.now();
     let buffer = "", diagnostics = "", candidate: unknown, touchedTools = false, completed = false, settled = false;
     let outOffset = 0, errOffset = 0, killTimer: ReturnType<typeof setTimeout> | undefined;
+    // --- Stall watchdog: the agent process is alive but has stopped producing anything ---
+    let lastActivityAt = startedAt, stall: "restart" | "stop" | undefined, noticed = false;
     const timer = setTimeout(() => { diagnostics = "Execution timeout."; abort(); }, 2 * 60 * 60_000);
     function cleanup() { clearTimeout(timer); clearTimeout(killTimer); clearInterval(poller); signal.removeEventListener("abort", abort); }
     function abort() {
@@ -242,6 +257,7 @@ async function runAgentOnce(id: string, settings: WorkerSettings, task: ClaimedT
     signal.addEventListener("abort", abort, { once: true });
     function event(line: string) {
       let e; try { e = JSON.parse(line); } catch { return; }
+      if (isAgentActivity(e.type)) { lastActivityAt = Date.now(); noticed = false; }
       // Claude reports its 5-hour and weekly usage in every stream.
       if (onLimits && id.startsWith("claude-")) { const reading = claudeLimitsFromEvent(e); if (reading) onLimits(reading); }
       const tool = e.type === "assistant" && e.message?.content?.some((c: {type: string; name: string}) => c.type === "tool_use" && mayHaveActed(c.name)) ||
@@ -275,7 +291,17 @@ async function runAgentOnce(id: string, settings: WorkerSettings, task: ClaimedT
       });
       return chain;
     }
-    const poller = setInterval(() => { void drain().catch(() => abort()); }, 500);
+    const poller = setInterval(() => { void drain().catch(() => abort()); watch(); }, 500);
+    /** Tells the dashboard when the agent goes quiet, and stops it if it stays quiet. */
+    function watch() {
+      if (settled || stall || signal.aborted) return;
+      const quiet = Date.now() - lastActivityAt;
+      if (!noticed && !touchedTools && quiet >= STALL_NOTICE_MS) { noticed = true; progress(id + " hasn't answered yet; still waiting."); }
+      const verdict = stallVerdict(quiet, touchedTools);
+      if (verdict === "wait") return;
+      stall = verdict; diagnostics = "No agent activity for " + Math.round(quiet / 60_000) + " minutes.";
+      abort();
+    }
     child.once("error", (error: NodeJS.ErrnoException) => {
       if (settled) return; settled = true; cleanup();
       const code = /^[A-Z0-9_]{1,30}$/.test(error.code ?? "") ? error.code : "launch error";
@@ -289,6 +315,10 @@ async function runAgentOnce(id: string, settings: WorkerSettings, task: ClaimedT
         await drain(); buffer += decoder.decode(); if (buffer.trim()) event(buffer);
         if (settled) return;
         settled = true; cleanup(); await dispose();
+        // The watchdog stopped it. Nothing was done yet: safe to start it again or hand the task to another agent. Otherwise leave it for review.
+        if (stall && !signal.aborted) return resolve(stall === "restart"
+          ? { report: emptyReport("needs_input", id + " stopped responding before it did anything."), failure: "unavailable", safeToRetry: true, stalled: true }
+          : { report: emptyReport("needs_input", id + " went quiet for " + STALL_AFTER_ACTION_MS / 60_000 + " minutes and was stopped. Some actions may already have happened; check the browser or files before retrying."), safeToRetry: false });
         if (signal.aborted || killTimer) return resolve({ report: emptyReport(signal.aborted ? "cancelled" : "needs_input",
           "Agent stopped. Some actions may already have happened; inspect the workspace or browser before retrying."), safeToRetry: false });
         if (child.exitCode === 0 && completed) {
