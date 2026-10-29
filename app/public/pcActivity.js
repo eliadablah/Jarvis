@@ -118,7 +118,7 @@ export function mountPcActivity({ api, safe, modal, toast, navigate }) {
       drawLimits(state.limits);
       document.querySelector('#pc-connection').textContent = !state.enabled ? 'Not enabled' : state.workerOnline ? 'PC online' : 'PC offline';
       const row = document.querySelectorAll('.connections .connection-row')[2];
-      if (row) { row.querySelector('span').textContent = 'PC worker'; row.querySelector('.connection-status').textContent = state.workerOnline ? 'Online' : 'Offline'; }
+      if (row) { row.querySelector('span').textContent = 'Hands'; row.querySelector('.connection-status').textContent = state.workerOnline ? 'Online' : 'Offline'; }
       const ready=(state.executors || []).filter(e=>e.state==='ready');
       document.querySelector('#pc-agents-summary').textContent = ready.length+' agents · browser actions '+(ready.some(e=>e.capabilities.includes('browser.execute'))?'ready':'needs update')+' · Windows '+(ready.some(e=>e.capabilities.includes('computer'))?'ready':'needs setup');
       const waiting=t=>t.status==='running'&&(t.approvals||[]).some(a=>!a.decision&&Date.parse(a.expiresAt)>Date.now());

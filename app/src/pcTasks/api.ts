@@ -64,7 +64,7 @@ export async function handlePcTasks(req: IncomingMessage, res: ServerResponse, p
     const match = /^\/api\/pc\/tasks\/([0-9a-f-]{36})\/(result|heartbeat|cancel|retry|submission|job-state|approval)$/.exec(path);
     if (match?.[2] === "retry") {
       checkRequestSource(req.headers); await bodyOf(req);
-      if (!config.pcWorkerToken) { json(res,409,{error:"PC worker is not enabled."}); return; }
+      if (!config.pcWorkerToken) { json(res,409,{error:"Hands is not enabled."}); return; }
       try {
         const task = await retryPcTask(dir,match[1]!);
         json(res,task?200:404,task?{task:publicTask(task)}:{error:"Task not found."});
@@ -78,11 +78,11 @@ export async function handlePcTasks(req: IncomingMessage, res: ServerResponse, p
     }
     if (!tokenMatches(req.headers.authorization, config.pcWorkerToken)) { json(res, 401, { error: "Worker token required." }); return; }
     const raw = await readBody(req);
-    if (!raw.trim()) { json(res, 426, { error: "Update the PC worker to protocol 2 before claiming tasks." }); return; }
+    if (!raw.trim()) { json(res, 426, { error: "Update Hands to protocol 2 before claiming tasks." }); return; }
     let body: Record<string, unknown>;
     try { body = JSON.parse(raw); } catch { throw new ChatRequestError(400, "Invalid JSON."); }
     if (!body || typeof body !== "object" || Array.isArray(body)) throw new ChatRequestError(400, "Expected an object.");
-    if (body.protocol !== PC_PROTOCOL) { json(res, 426, { error: "PC worker update required." }); return; }
+    if (body.protocol !== PC_PROTOCOL) { json(res, 426, { error: "Hands update required." }); return; }
     if (!uuid(body.workerId)) throw new ChatRequestError(400, "Invalid worker ID.");
     // Usage limits ride along on claims and heartbeats; a bad reading is ignored, never an error.
     if (body.limits !== undefined) { const limits = sanitizeLimits(body.limits); if (limits.claude || limits.codex) await setPcLimits(dir, limits); }

@@ -113,10 +113,10 @@ export function claimNextPcTask(dir: string, workerId: string, executors: Execut
     if (!task.plan) { task.status = "needs_input"; task.result = "Older task needs an explicit search, prepare, or submit request."; return; }
     if(task.toolProfile==="personal" && task.requiredFeature==="personal-tools-v1")task.requiredFeature="full-tools-v2";
     const candidates = executors.filter(e => e.capabilities.includes(capabilityFor(task.plan!)) && (!task.requiredFeature || e.features?.includes(task.requiredFeature)));
-    if (task.requiredFeature && !candidates.length) { task.progress = task.requiredFeature === "personal-tools-v1" || task.requiredFeature === "full-tools-v2" ? "Waiting for the updated worker to connect your Claude Code and Codex tools. Restart the idle PC worker to activate them." : "Waiting for the updated worker with task-scoped submission receipts. Restart the idle PC worker to activate the fix."; return; }
+    if (task.requiredFeature && !candidates.length) { task.progress = task.requiredFeature === "personal-tools-v1" || task.requiredFeature === "full-tools-v2" ? "Waiting for the updated worker to connect your Claude Code and Codex tools. Restart idle Hands to activate them." : "Waiting for the updated worker with task-scoped submission receipts. Restart idle Hands to activate the fix."; return; }
     if (!candidates.some(e => e.state === "ready")) {
       task.progress = candidates.some(e => e.state === "cooldown") ? "Waiting for a capable agent's usage limit to reset." : "No ready agent has the required tools. Check PC agents.";
-      if (!candidates.length && ["computer", "browser.execute"].includes(capabilityFor(task.plan))) { task.progress = "Waiting for the updated PC worker to connect its action tools. Restart the idle worker to activate them."; }
+      if (!candidates.length && ["computer", "browser.execute"].includes(capabilityFor(task.plan))) { task.progress = "Waiting for the updated Hands to connect its action tools. Restart the idle worker to activate them."; }
       else if (!candidates.some(e => e.state === "cooldown")) { task.status = "needs_input"; task.result = task.progress; }
       return;
     }

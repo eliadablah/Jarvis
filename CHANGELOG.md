@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-10-28
+
+### Feature - Aurora (D) and Ember (E) dashboard views
+
+- New `dashboard-theme.css` restyles the dashboard (sidebar, cards, orb, command dock, modals) as view D, Aurora (violet and orange), and view E, Ember (charcoal and orange). `dashboard.js` sets `body[data-theme]` only for D and E, so A, B and C and their stylesheets are untouched. Spoken commands accept "view d", "aurora" and "ember". The file is in the `copy-assets.mjs` list.
+- The automatic rotation now covers all five views, by the device's clock: B 6 AM, D 9 AM, A noon, E 3 PM, C 6 PM, D 10 PM. It is a placeholder schedule for comparing looks on dev; the table is at the top of `viewSchedule.js`.
+
+### Feature - Every order goes to Claude Code or Codex
+
+- New `pcTasks/errand.ts`: a clear order that matched no narrower errand (for example "fix the login bug in Jarvis", "write a cover letter") is now handed to Hands as a computer errand, which gives it to an available Claude Code or Codex run. Questions, statements, negations, permission-bypass phrasing, and Jarvis's own task list and reminders still stay in chat. The chat model's capability guidance says the same.
+- Validation: type checks clean; 133 app tests pass, including new routing and view-rotation tests. The old test that kept "Write a cover letter for me" in chat now expects a handoff, which is the intended change.
+
+### Config - PC worker renamed to Hands in the interface
+
+- Dashboard labels, handoff replies, API errors and the chat persona now say Hands. Internal names (`pc-worker/` folder, `PC_WORKER_TOKEN`, scheduled task) are unchanged so the running worker and CI keep working.
 ## 2026-10-20
 
 ### Feature - One saved consent for Jarvis tools
