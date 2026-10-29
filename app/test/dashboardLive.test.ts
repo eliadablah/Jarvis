@@ -2,6 +2,20 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { describeProgress, recentSteps } from "../public/liveIsland.js";
 import { dueLabel, sortReminders, isReminder } from "../public/remindersPanel.js";
+import { ago } from "../public/newsPanel.js";
+import { scoreLine } from "../public/learnPanel.js";
+
+test("news ages read naturally and quiz scores come with a comment", () => {
+  const now = Date.parse("2026-10-28T20:00:00Z");
+  assert.equal(ago("2026-10-28T19:59:30Z", now), "just now");
+  assert.equal(ago("2026-10-28T19:48:00Z", now), "12 min ago");
+  assert.equal(ago("2026-10-28T17:00:00Z", now), "3 h ago");
+  assert.equal(ago("2026-10-26T20:00:00Z", now), "2 d ago");
+  assert.equal(ago("garbage", now), "");
+  assert.match(scoreLine(5, 5), /^5 of 5\. Perfect/);
+  assert.match(scoreLine(3, 5), /^3 of 5\. Solid/);
+  assert.match(scoreLine(1, 5), /^1 of 5\. Keep going/);
+});
 
 const NOW = Date.parse("2026-10-28T20:00:00Z");
 

@@ -18,6 +18,8 @@ import { handleJobs, startTrackerUpdates } from "./jobs/api.ts";
 import { handleSchedules } from "./schedules/api.ts";
 import { startScheduler } from "./schedules/morning.ts";
 import {handleLive,closeLiveClients} from "./live.ts";
+import { handleNews } from "./news/api.ts";
+import { handleLearn } from "./learn/api.ts";
 
 const config = loadConfig();
 let stopTrackerUpdates = () => {};
@@ -29,6 +31,16 @@ const server = createServer((req, res) => {
 
   if (path.startsWith('/api/dashboard')) {
     handleDashboard(req, res, path, config).catch(() => { if (!res.headersSent) res.writeHead(500); res.end(); });
+    return;
+  }
+
+  // --- Tech news and the daily DevOps teacher ---
+  if (path === "/api/news") {
+    handleNews(req, res).catch(() => { if (!res.headersSent) res.writeHead(500); res.end(); });
+    return;
+  }
+  if (path.startsWith("/api/learn")) {
+    handleLearn(req, res, path, config).catch(() => { if (!res.headersSent) res.writeHead(500); res.end(); });
     return;
   }
 

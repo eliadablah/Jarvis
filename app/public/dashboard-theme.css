@@ -52,6 +52,35 @@
 .reminder-row.is-done .task-title { text-decoration: line-through; opacity: .55; }
 .modal .modal-input { width: 100%; margin-bottom: 14px; }
 
+/* DevOps teacher and tech news cards (every view) */
+.learn-progress { display: flex; align-items: center; gap: 10px; margin: 0 0 10px; font-size: 13px; color: var(--muted, #86958c); }
+.learn-q { margin: 0 0 14px; font-size: 18px; line-height: 1.45; font-weight: 600; }
+.learn-choices { display: grid; gap: 8px; }
+.learn-choice { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 14px; text-align: left; font-size: 15px; line-height: 1.4; color: inherit; background: transparent; border: 1px solid var(--line, #29352f); border-radius: 14px; transition: transform .3s cubic-bezier(.2, .9, .25, 1.12), border-color .2s, background .2s, opacity .2s; }
+.learn-choice b { display: grid; place-items: center; flex: none; width: 26px; height: 26px; border-radius: 50%; font-size: 12px; background: color-mix(in srgb, var(--muted, #86958c) 22%, transparent); }
+.learn-choice:hover:not(:disabled) { border-color: var(--mint, #b8eccb); transform: translateX(3px); }
+.learn-choice:disabled { cursor: default; }
+.learn-choice.is-right { border-color: #34d399; background: color-mix(in srgb, #34d399 16%, transparent); }
+.learn-choice.is-right b { background: #34d399; color: #06251b; }
+.learn-choice.is-wrong { border-color: #ff7a6b; background: color-mix(in srgb, #ff7a6b 14%, transparent); }
+.learn-choice.is-wrong b { background: #ff7a6b; color: #2a0b07; }
+.learn-choice.is-dim { opacity: .5; }
+.learn-why { margin: 12px 0 4px; padding: 12px 14px; font-size: 14px; line-height: 1.55; border-radius: 14px; background: color-mix(in srgb, var(--muted, #86958c) 12%, transparent); }
+.learn-why.is-right strong { color: #34d399; }
+.learn-why.is-wrong strong { color: #ff7a6b; }
+.learn-topics { display: flex; flex-wrap: wrap; gap: 6px; margin: 14px 0 0; }
+.learn-topics span { padding: 3px 9px; font-size: 12px; border-radius: 99px; color: var(--muted, #86958c); background: color-mix(in srgb, var(--muted, #86958c) 14%, transparent); }
+.learn-topics b { margin-left: 3px; color: inherit; }
+.learn-summary { padding: 18px 0 8px; }
+.learn-summary h3 { margin: 0 0 6px; font-size: 20px; }
+.learn .primary-btn { margin-top: 12px; }
+.news-list { display: flex; flex-direction: column; }
+.news-row { display: flex; flex-direction: column; gap: 3px; padding: 11px 0; color: inherit; text-decoration: none; border-bottom: 1px solid var(--line, #29352f); }
+.news-row:last-child { border-bottom: 0; }
+.news-title { font-size: 15px; line-height: 1.4; font-weight: 500; }
+.news-meta { font-size: 12px; color: var(--muted, #86958c); }
+.news-row:hover .news-title { text-decoration: underline; }
+
 /* ---------- Part 2: views D (Aurora) and E (Ember) ---------- */
 
 html body[data-theme] {
@@ -146,7 +175,14 @@ html body[data-theme] {
   /* --- Priority order: to-dos, queue, money, jobs, reminders, schedule --- */
   .dashboard-grid:not(.single-view) { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; align-items: stretch; }
   .dashboard-grid:not(.single-view)>.pc-activity { grid-column: auto; }
-  .priorities { order: 1; } .pc-activity { order: 2; } .money { order: 3; } .career { order: 4; } .reminders { order: 5; } .schedule { order: 6; } .memory { order: 7; }
+  .priorities { order: 1; } .pc-activity { order: 2; } .money { order: 3; } .career { order: 4; } .reminders { order: 5; } .learn { order: 6; } .news { order: 7; } .schedule { order: 8; } .memory { order: 9; }
+  .learn-choice { background: rgba(255, 255, 255, .05); border: .5px solid var(--t-line); font-size: 16px; }
+  .learn-choice b { background: rgba(255, 255, 255, .14); }
+  .learn-q { font-size: 20px; letter-spacing: -.01em; }
+  .learn-why, .learn-topics span { background: rgba(255, 255, 255, .07); }
+  .news-row, .news-row:last-child { border-color: var(--t-line); }
+  .news-title { font-size: 16px; color: var(--t-tx); }
+  .news-meta { color: var(--t-mu); font-size: 13px; }
 
   /* --- Content pieces --- */
   .task-progress, .card .progress-bar { height: 5px; background: rgba(255, 255, 255, .12); }
@@ -227,7 +263,7 @@ html body[data-theme] {
   /* --- Hover: things lift and open up. Only where a pointer can hover. --- */
   .dashboard-grid>.card, .stat { animation-fill-mode: backwards; }
   .card, .stat, .live-island { transition: transform .45s var(--t-ease), box-shadow .45s, background .3s, border-color .3s; }
-  .task-row, .bill-row, .reminder-row, .pc-task, .schedule-row, .connection-row { transition: transform .35s var(--t-ease), background .25s, padding .35s var(--t-ease), border-radius .35s; }
+  .task-row, .bill-row, .reminder-row, .pc-task, .schedule-row, .connection-row, .news-row { transition: transform .35s var(--t-ease), background .25s, padding .35s var(--t-ease), border-radius .35s; }
   .task-row .task-meta { transition: max-height .35s var(--t-ease), opacity .25s, margin .3s; }
 
   @media (hover: hover) {
@@ -236,6 +272,8 @@ html body[data-theme] {
     .live-island:hover { transform: scale(1.012); box-shadow: 0 30px 64px -18px rgba(0, 0, 0, .78); }
     .task-row:hover, .bill-row:hover, .reminder-row:hover, .schedule-row:hover { transform: scale(1.035); background: rgba(255, 255, 255, .09); border-radius: 16px; padding-left: 12px; padding-right: 12px; border-color: transparent; }
     .pc-task:hover { transform: scale(1.03); background: rgba(255, 255, 255, .1); }
+    .news-row:hover { transform: scale(1.025); background: rgba(255, 255, 255, .09); border-radius: 16px; padding-left: 12px; padding-right: 12px; border-color: transparent; }
+    .learn-choice:hover:not(:disabled) { transform: scale(1.02); background: rgba(255, 255, 255, .1); border-color: var(--t-a1); }
     .connection-row:hover { transform: translateX(4px); color: var(--t-tx); }
     /* Secondary detail stays tucked away until you point at the row. */
     .task-row .task-meta { max-height: 0; opacity: 0; margin-top: 0; overflow: hidden; }

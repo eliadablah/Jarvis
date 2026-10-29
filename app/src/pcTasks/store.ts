@@ -99,7 +99,7 @@ export function retryPcTask(dir: string, id: string, now = new Date()): Promise<
     if (intent?.type !== "task") throw new Error("Retry needs an explicit scoped task.");
     const task: PcTask = {id:randomUUID(),kind:intent.plan.kind,plan:intent.plan,request,status:"queued",createdAt:now.toISOString(),retryOf:id,
       toolProfile: source.toolProfile ?? "scoped",
-      displayRequest:"Try again: " + (source.displayRequest ?? source.request).slice(0,1800), ...(intent.plan.kind === "jobs" ? { requiredFeature: "task-sync-v1" as const } : {})};
+      displayRequest:"Try again: " + (source.displayRequest ?? source.request).replace(/^(?:Try again: )+/, "").slice(0,1800), ...(intent.plan.kind === "jobs" ? { requiredFeature: "task-sync-v1" as const } : {})};
     if(task.toolProfile === "personal" && task.plan?.kind !== "desktop") task.requiredFeature = "full-tools-v2";
     source.retryTaskId = task.id;
     state.tasks.push(task); return task;

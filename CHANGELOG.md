@@ -2,6 +2,13 @@
 
 ## 2026-10-28
 
+### Feature - Daily DevOps teacher and tech news
+
+- New DevOps teacher card and sidebar entry (Learn). One multiple-choice question a day with an explanation after you answer, a streak, topic progress, and a "Quiz me" five-question practice round. The bank (`learn/questions.ts`) has 57 questions across Networking (Network+), Linux, Git, Docker, Kubernetes, CI/CD, Terraform and AWS. The daily question rotates through the topics you've practised least, and a missed question returns after two days. History is saved on the server (`learn.json`) and days are counted in the morning-run time zone. The answer and explanation are never sent to the browser until you have answered; answering the daily twice keeps the first answer.
+- New tech news card and sidebar entry. `news/feeds.ts` reads RSS and Atom from a fixed list (Hacker News, AWS News, Kubernetes, Docker, HashiCorp, The New Stack, GitHub, Ars Technica); `GET /api/news` caches for 30 minutes, skips feeds that are down, and falls back to the last good copy. The browser never supplies a feed address. Only http(s) links are shown and they open in a new tab.
+- Fix: a retried task's title no longer stacks "Try again: Try again:".
+- Validation: type checks clean; tests cover the feed reader (RSS, Atom, entities, unsafe links), merging and caching, the question bank (unique ids, four distinct choices, answer positions spread), question selection, the streak, answer handling and answer secrecy. Checked in a browser against the real feeds.
+
 ### Feature - Apple-style D/E, priority layout, live Hands feed and reminders
 
 - Views D and E are restyled in an Apple-like language: system font stack with large titles, frosted-glass cards, pill buttons, a segmented view switch, and springy motion. Cards and rows lift and open up when hovered (hover-capable devices only; touch keeps everything visible). A, B and C are unchanged.
