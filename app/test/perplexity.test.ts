@@ -39,7 +39,8 @@ test("maps Perplexity's errors to quota, sign-in, or unavailable", () => {
   assert.equal(classifyPerplexityError(401, undefined), "authentication");
   assert.equal(classifyPerplexityError(403, "forbidden"), "authentication");
   assert.equal(classifyPerplexityError(500, undefined), "unavailable");
-  assert.deepEqual(parsePerplexityLine(data({ type: "response.failed", response: { error: { code: "rate_limit_exceeded" } } })), { kind: "error", code: "quota" });
+  const failed = parsePerplexityLine(data({ type: "response.failed", response: { error: { code: "rate_limit_exceeded", message: "Slow down" } } }));
+  assert.deepEqual(failed, { kind: "error", code: "quota", detail: "(HTTP no response: rate_limit_exceeded - Slow down)" });
 });
 
 test("citation markers are removed even when a chunk splits them, and real brackets stay", () => {
@@ -111,6 +112,16 @@ test("when Perplexity is off Auto uses another engine, and it never stands in fo
   assert.equal(refused.at(-1)?.type, "error");
 });
 
+test("chat shows Perplexity's own reason for a refusal, but never another engine's diagnostics", async () => {
+  const reason = "(HTTP 403: forbidden - This key can't use the Agent API)";
+  const perplexity = new ChatRouter({ perplexity: fake([{ type: "error", code: "authentication", message: "Perplexity's API key was refused. " + reason }]) });
+  const shown = await collect(perplexity.answer({ message: "hi", provider: "perplexity" }, signal()));
+  assert.match((shown.at(-1) as { message: string }).message, /needs its server sign-in renewed.*\(HTTP 403: forbidden - This key can't use the Agent API\)/);
+  const claude = new ChatRouter({ claude: fake([{ type: "error", code: "authentication", message: "token abc123 expired at /home/node/.claude" }]) });
+  const hidden = await collect(claude.answer({ message: "hi", provider: "claude" }, signal()));
+  assert.doesNotMatch((hidden.at(-1) as { message: string }).message, /abc123|\.claude/);
+});
+
 test("askPerplexity sends the key, streams clean text, appends sources, and remembers the thread", async () => {
   const dir = await mkdtemp(join(tmpdir(), "jarvis-pplx-"));
   const real = globalThis.fetch;
@@ -161,6 +172,7 @@ test("askPerplexity reports a refused key or an empty balance without leaking th
       assert.equal(error.type, "error");
       assert.equal(error.code, code);
       assert.doesNotMatch(error.message, /pplx-secret/);
+      assert.match(error.message, new RegExp(`\\(HTTP ${status}: x - \\[key\\] is bad\\)`), "the real status and reason are shown, with the key removed");
     }
   } finally { globalThis.fetch = real; await rm(dir, { recursive: true, force: true }); }
 });

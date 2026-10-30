@@ -36,7 +36,7 @@ export type PerplexityStreamItem =
   | { kind: "created"; id: string }
   | { kind: "text"; text: string }
   | { kind: "completed"; id?: string; sources: PerplexitySource[] }
-  | { kind: "error"; code: ChatFailureCode }
+  | { kind: "error"; code: ChatFailureCode; detail?: string }
   | { kind: "ignore" };
 
 /** Maps Perplexity's error codes and HTTP statuses to Jarvis's failure kinds. */
@@ -44,6 +44,16 @@ export function classifyPerplexityError(status: number | undefined, code: string
   if (status === 429 || status === 402 || /rate_limit|quota|too_many|payment|insufficient|credit|billing/i.test(code ?? "")) return "quota";
   if (status === 401 || status === 403 || /authentication|unauthori[sz]ed|permission|invalid_api_key|forbidden/i.test(code ?? "")) return "authentication";
   return "unavailable";
+}
+
+/**
+ * What Perplexity said was wrong, for the error shown in chat: the HTTP status plus its error code and message, cut short,
+ * with anything that looks like an API key removed. Perplexity's error text describes the request, not the key's value.
+ */
+export function describePerplexityError(status: number | undefined, error?: { code?: string; message?: string; type?: string }): string {
+  const clean = (value: unknown) => typeof value === "string" ? value.replace(/pplx-[A-Za-z0-9_-]+/g, "[key]").replace(/\s+/g, " ").trim().slice(0, 200) : "";
+  const parts = [clean(error?.code) || clean(error?.type), clean(error?.message)].filter(Boolean);
+  return `(HTTP ${status ?? "no response"}${parts.length ? ": " + parts.join(" - ") : ""})`;
 }
 
 /** Sources a finished answer used: the cited ones first, then the search results, https only, no repeats. */
@@ -86,8 +96,10 @@ export function parsePerplexityLine(line: string): PerplexityStreamItem {
     case "response.completed":
       return { kind: "completed", id: typeof data.response?.id === "string" ? data.response.id : undefined, sources: sourcesOf(data.response) };
     case "response.failed":
-    case "error":
-      return { kind: "error", code: classifyPerplexityError(undefined, data.response?.error?.code ?? data.error?.code) };
+    case "error": {
+      const error = data.response?.error ?? data.error;
+      return { kind: "error", code: classifyPerplexityError(undefined, error?.code), detail: describePerplexityError(undefined, error) };
+    }
     default:
       return { kind: "ignore" };
   }
@@ -174,9 +186,9 @@ export async function* askPerplexity(config: PerplexityConfig, memory: ClaudeCon
   }
 
   if (!res || !res.ok || !res.body) {
-    const detail = (await res?.json().catch(() => undefined)) as { error?: { code?: string } } | undefined;
+    const detail = (await res?.json().catch(() => undefined)) as { error?: { code?: string; message?: string; type?: string } } | undefined;
     const code = classifyPerplexityError(res?.status, detail?.error?.code);
-    yield { type: "error", code, message: FAILURE_TEXT[code] };
+    yield { type: "error", code, message: `${FAILURE_TEXT[code]} ${describePerplexityError(res?.status, detail?.error)}` };
     return;
   }
 
@@ -194,7 +206,7 @@ export async function* askPerplexity(config: PerplexityConfig, memory: ClaudeCon
         else if (item.kind === "text") { const clean = filter.push(item.text); if (clean) yield { type: "text", text: clean }; }
         else if (item.kind === "completed") { completed = true; sources = item.sources; if (item.id) rememberThread(session, item.id); }
         else if (item.kind === "error") {
-          yield { type: "error", code: item.code, message: FAILURE_TEXT[item.code] };
+          yield { type: "error", code: item.code, message: `${FAILURE_TEXT[item.code]} ${item.detail ?? ""}`.trim() };
           return;
         }
       }

@@ -2,6 +2,12 @@
 
 ## 2026-10-30
 
+### Fix - Show Perplexity's real error in chat
+
+- On dev, Perplexity answered "needs its server sign-in renewed" even though the API console showed $10.00 of credit and the key as used a minute earlier, so the key was accepted and Perplexity refused something else; the generic message hid what.
+- A Perplexity failure now ends with the HTTP status and Perplexity's own error code and message, for example "(HTTP 403: forbidden - ...)". Text is cut to 200 characters and anything shaped like a key (`pplx-...`) is replaced with "[key]". Other engines still show only the generic message, so CLI diagnostics stay hidden (`describePerplexityError`, `failureMessage` in `app/src/brain/`).
+- Validation: type checks clean; 175 app tests pass (status and reason shown with the key removed, stream errors, Perplexity detail shown while Claude's diagnostics stay hidden). Not yet seen against the real error.
+
 ### Feature - Perplexity as a chat engine
 
 - New engine next to Claude, Codex and Gemini (`app/src/brain/perplexity.ts`), using Perplexity's Agent API (`POST /v1/agent`, streaming) with `fetch` and no new dependency. Answers use live web search; the sources appear under the answer and the numbered citation markers are stripped from the text (even when split across chunks). Follow-ups continue through `previous_response_id`; a thread Perplexity no longer knows is asked again fresh.

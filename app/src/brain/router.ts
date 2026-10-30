@@ -70,11 +70,13 @@ export function requiresAccountAccess(message: string): boolean {
   return connectorScope(message) !== "none";
 }
 
-function failureMessage(provider: ChatProvider, code: ChatFailureCode, partial: boolean): string {
+function failureMessage(provider: ChatProvider, code: ChatFailureCode, partial: boolean, detail?: string): string {
   if (partial) return `${label(provider)} stopped before finishing its answer. Please try again.`;
-  if (code === "quota") return `${label(provider)} reported a usage limit. Try again later or choose another engine.`;
-  if (code === "authentication") return `${label(provider)} needs its server sign-in renewed. Choose another engine for now.`;
-  return `${label(provider)} could not answer. Please try again or choose another engine.`;
+  // Only an API engine's own error text is shown (the CLI engines' diagnostics stay hidden).
+  const why = detail ? ` ${detail}` : "";
+  if (code === "quota") return `${label(provider)} reported a usage limit. Try again later or choose another engine.${why}`;
+  if (code === "authentication") return `${label(provider)} needs its server sign-in renewed. Choose another engine for now.${why}`;
+  return `${label(provider)} could not answer. Please try again or choose another engine.${why}`;
 }
 
 /** Cooldowns are bounded, and a manual selection can explicitly retry early. */
@@ -127,7 +129,7 @@ export class ChatRouter {
     const others = FALLBACK_ORDER.filter(provider => provider !== preference.provider);
     const attempts: ChatProvider[] = automatic ? [preference.provider, ...others] : [preference.provider];
     let previousFailure: ChatProvider | undefined;
-    let lastFailure: { provider: ChatProvider; code: ChatFailureCode } | undefined;
+    let lastFailure: { provider: ChatProvider; code: ChatFailureCode; detail?: string } | undefined;
 
     for (const provider of attempts) {
       const engine = this.engines[provider];
@@ -141,6 +143,7 @@ export class ChatRouter {
         ?? (!automatic && provider === (chat.provider ?? "claude") ? chat.sessionId : undefined);
       let emittedText = false;
       let failure: ChatFailureCode | undefined;
+      let detail: string | undefined;
       try {
         for await (const event of engine.ask(chat.message, sessionId, signal, chat.serverContext)) {
           if (signal.aborted) { yield { type: "error", message: "Request cancelled." }; return; }
@@ -152,6 +155,8 @@ export class ChatRouter {
             return;
           } else if (event.type === "error") {
             failure = event.code ?? classifyProviderFailure(event.message);
+            // Perplexity's message is built from its HTTP status and error text only, so it is safe to show.
+            if (provider === "perplexity") detail = event.message;
             break;
           }
         }
@@ -161,15 +166,15 @@ export class ChatRouter {
       if (signal.aborted) { yield { type: "error", message: "Request cancelled." }; return; }
       failure ??= "unavailable";
       this.markFailure(provider, failure);
-      lastFailure = { provider, code: failure };
+      lastFailure = { provider, code: failure, detail };
       if (emittedText || !automatic) {
-        yield { type: "error", message: failureMessage(provider, failure, emittedText), code: failure };
+        yield { type: "error", message: failureMessage(provider, failure, emittedText, detail), code: failure };
         return;
       }
       previousFailure = provider;
     }
 
-    if (lastFailure) yield { type: "error", message: failureMessage(lastFailure.provider, lastFailure.code, false), code: lastFailure.code };
+    if (lastFailure) yield { type: "error", message: failureMessage(lastFailure.provider, lastFailure.code, false, lastFailure.detail), code: lastFailure.code };
     else yield { type: "error", message: this.nothingTriedMessage(needsAccountAccess, statuses) };
   }
 
