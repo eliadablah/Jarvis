@@ -112,6 +112,7 @@ jobs:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           VAULT_DEPLOY_KEY: ${{ secrets.VAULT_DEPLOY_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          PERPLEXITY_API_KEY: ${{ secrets.PERPLEXITY_API_KEY }}
           PC_WORKER_TOKEN: ${{ secrets.PC_WORKER_TOKEN }}
           GOOGLE_SERVICE_ACCOUNT_B64: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_B64 }}
         run: bash deploy/deploy.sh "$HOST" "$APP_ENV" "${{ needs.build.outputs.tag }}" "$DOMAIN"
@@ -161,6 +162,7 @@ jobs:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           VAULT_DEPLOY_KEY: ${{ secrets.VAULT_DEPLOY_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          PERPLEXITY_API_KEY: ${{ secrets.PERPLEXITY_API_KEY }}
           PC_WORKER_TOKEN: ${{ secrets.PC_WORKER_TOKEN }}
           GOOGLE_SERVICE_ACCOUNT_B64: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_B64 }}
         run: bash deploy/deploy.sh "$HOST" "$APP_ENV" "${{ needs.build.outputs.tag }}" "$DOMAIN"

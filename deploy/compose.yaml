@@ -23,13 +23,15 @@ services:
       # Gemini gets no vault notes or tasks unless this is "true"
       # (free-tier prompts may be used to train Google's models).
       GEMINI_SHARE_VAULT: "false"
+      # Perplexity gets no vault notes or tasks unless this is "true".
+      PERPLEXITY_SHARE_VAULT: "false"
       # The daily morning job run Jarvis queues for my PC (local time in this zone; 25 is the most one task may submit).
       MORNING_RUN_TIME: "07:00"
       MORNING_RUN_COUNT: "10"
       MORNING_RUN_TZ: America/Chicago
       # My job tracker sheet. Not a secret: reading it needs the service account key below.
       JOB_TRACKER_SHEET_ID: 1ZmuYTwQOtk-A09bLGyGi6QlfR18OfTduacYHVA8uLUk
-    # CLAUDE_CODE_OAUTH_TOKEN, GEMINI_API_KEY and GOOGLE_SERVICE_ACCOUNT_B64 live only in this file on the server.
+    # CLAUDE_CODE_OAUTH_TOKEN, GEMINI_API_KEY, PERPLEXITY_API_KEY and GOOGLE_SERVICE_ACCOUNT_B64 live only in this file on the server.
     env_file: .env
     expose:
       - "3000"

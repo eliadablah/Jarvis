@@ -22,8 +22,13 @@ test('explicit continuation and LinkedIn drafts dispatch without model offers',(
  for(const message of ['How do I continue the EZLynx demo?','Do not continue the EZLynx demo','"Draft LinkedIn replies"','Can you draft LinkedIn replies if I ask?'])assert.equal(resolvePcCommand(message),undefined,message);
 });
 test('natural commands remain independently valid for the already-running worker',()=>{
- for(const message of ['Open my job tracker Google Sheet in Chrome','Please open https://example.com','Jarvis, can you pull up my application tracker?','Go to https://example.com','Bring up my Gmail','On my PC open https://example.com','Read my email in Chrome']){
+ for(const message of ['Open my job tracker Google Sheet in Chrome','Jarvis, can you pull up my application tracker?','Bring up my Gmail','Read my email in Chrome']){
   const c=resolvePcCommand(message);assert.equal(c?.intent.type,'task',message);assert.deepEqual(parsePcIntent(c!.request),c!.intent,message);assert.equal(c!.intent.type==='task'&&c!.intent.plan.kind,'browser');
+ }
+ // Just opening an https link needs no agent: it goes to Hands' quick lane and runs next to a long task.
+ for(const message of ['Please open https://example.com','Go to https://example.com','On my PC open https://example.com']){
+  const c=resolvePcCommand(message);assert.equal(c?.intent.type,'task',message);assert.deepEqual(parsePcIntent(c!.request),c!.intent,message);
+  assert.deepEqual(c!.intent.type==='task'&&c!.intent.plan,{kind:'desktop',action:'open_url',url:'https://example.com/'},message);
  }
  assert.equal(resolvePcCommand('Open Calculator')?.intent.type,'task');assert.equal(resolvePcCommand('Apply to 3 support jobs')?.intent.type,'task');
 });
@@ -34,7 +39,7 @@ test('discussion, negation and quoted instructions never dispatch; unsupported a
  for(const message of ['Open javascript:alert(1)','Open https://user:password@example.com'])assert.equal(resolvePcCommand(message)?.intent.type,'clarify',message);
 });
 test('open it requires one recent destination, never a guessed link',()=>{
- assert.equal(resolvePcCommand('open it')?.intent.type,'clarify');assert.equal(resolvePcCommand('open it','https://example.com/')?.request,'In my Chrome, open https://example.com/');
+ assert.equal(resolvePcCommand('open it')?.intent.type,'clarify');assert.equal(resolvePcCommand('open it','https://example.com/')?.request,'Open this link on my PC: https://example.com/');
  assert.equal(replyLink('Here: https://example.com/.'),'https://example.com/');assert.equal(replyLink('[A](https://a.example) [B](https://b.example)'),undefined);assert.equal(replyLink('https://user:password@example.com'),undefined);
 });
 test('HTTP chat queues ordinary open requests even when selected Codex chat is disabled, without duplicate execution',async()=>{

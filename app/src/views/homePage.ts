@@ -72,6 +72,7 @@ export function renderHomePage(config: AppConfig): string {
               <option value="claude">${escapeHtml(content.claudeLabel)}</option>
               <option value="codex"${config.codex?.enabled ? "" : " disabled"}>${escapeHtml(content.codexLabel)}</option>
               <option value="gemini"${config.gemini?.enabled ? "" : " disabled"}>${escapeHtml(content.geminiLabel)}</option>
+              <option value="perplexity"${config.perplexity?.enabled ? "" : " disabled"}>${escapeHtml(content.perplexityLabel)}</option>
             </select>
           </label>
           <button type="button" id="voice-toggle">${escapeHtml(content.voiceOnLabel)}</button>

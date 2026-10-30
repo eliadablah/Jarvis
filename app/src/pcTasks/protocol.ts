@@ -10,13 +10,15 @@ export type PcPlan =
   | { kind: "browser"; action: "browse" | "execute" }
   | { kind: "computer"; action: "execute" }
   | { kind: "workspace"; action: "execute"; workspace: string }
-  | { kind: "desktop"; action: "open_app"; app: "calculator" | "notepad" | "explorer" };
+  | { kind: "desktop"; action: "open_app"; app: "calculator" | "notepad" | "explorer" }
+  /** Opens one https link in the PC's default browser. Runs in the quick lane, with no agent. */
+  | { kind: "desktop"; action: "open_url"; url: string };
 export type Outcome = "completed" | "partial" | "needs_input" | "failed" | "cancelled";
 export interface Evidence { action: string; target: string; detail: string }
 export interface PcReport { outcome: Outcome; summary: string; evidence: Evidence[]; needsInput: string[]; submitted: number }
 export interface ExecutorStatus {
   id: string; capabilities: Capability[]; state: "ready" | "cooldown" | "unavailable";
-  features?: ("job-files-v1" | "task-sync-v1" | "personal-tools-v1" | "full-tools-v2")[];
+  features?: ("job-files-v1" | "task-sync-v1" | "personal-tools-v1" | "full-tools-v2" | "quick-lane-v1")[];
   reason: string; retryAt?: string; remainingTokens: null;
 }
 export function capabilityFor(plan: PcPlan): Capability { return plan.kind === "desktop" ? "desktop.launch" : plan.kind === "browser" && plan.action === "execute" ? "browser.execute" : plan.kind; }

@@ -1,4 +1,4 @@
-import { parsePcIntent, type PcIntent } from "./intent.ts";
+import { parsePcIntent, safeLink, type PcIntent } from "./intent.ts";
 import { isHypotheticalQuestion, normalizeCommand } from "./phrasing.ts";
 import { resolveGeneralErrand } from "./errand.ts";
 
@@ -43,7 +43,12 @@ function resolveJobCommand(text: string): PcCommand | undefined {
 
 /** Normalize explicit user commands before enqueueing. Keep the protocol-2 grammar
  * unchanged so an already-running worker can independently validate every plan. */
-export function resolvePcCommand(message: string, previousLink?: string): PcCommand | undefined {
+function quickOpen(url: string): PcCommand {
+  const request = "Open this link on my PC: " + url;
+  return { request, intent: parsePcIntent(request)! };
+}
+
+export function resolvePcCommand(message: string, previousLink?: string, links: { tracker?: string } = {}): PcCommand | undefined {
   // Everyday ways of giving an order ("go ahead and ...", "can you please ...",
   // "I need you to ...") reduce to the plain command; statements stay statements.
   if (isHypotheticalQuestion(message)) return;
@@ -98,6 +103,11 @@ export function resolvePcCommand(message: string, previousLink?: string): PcComm
   }
   const direct = parsePcIntent(text);
   if (direct) return { request: text, intent: direct };
+  // "Show me my job tracker": the server knows the sheet's link, so this opens it directly.
+  if (links?.tracker && /^(?:show me|take me to|open|pull up|bring up|go to)\s+(?:my |the )?(?:job|application) tracker(?:\s+(?:google\s+)?(?:sheet|spreadsheet|doc))?[.!]?$/i.test(text)) {
+    const tracker = safeLink(links.tracker);
+    if (tracker) return quickOpen(tracker);
+  }
   const open = /^(?:open|pull up|bring up|launch|visit|navigate to|go to)\s+(.+?)\s*[.!]?$/i.exec(text);
   if (open) {
     let target = open[1]!;
@@ -117,11 +127,14 @@ export function resolvePcCommand(message: string, previousLink?: string): PcComm
       try { const parsed = new URL(url); if (parsed.username || parsed.password) return clarify("Remove the username or password from that link before opening it."); }
       catch { return clarify("That link isn't valid. Send the full website URL."); }
     }
+    const changes = /\b(?:and|then)\s+(?:send|reply|forward|upload|fill|submit|book|schedule|update|edit|change|delete|save|click|type|press|create|add)\b/i.test(target);
+    // Just opening a link needs no agent: it goes to the quick lane and runs even while a long task is running.
+    const quickLink = url && !changes ? safeLink(url) : undefined;
+    if (quickLink) return quickOpen(quickLink);
     // The Chrome adapter may locate saved bookmarks/URLs in its approved jobs
     // workspace. Never invent or publish a user's private tracker URL.
     const tracker = /\b(?:job|application) tracker\b/i.test(target)
       ? " Locate its saved URL in the approved jobs workspace notes if necessary; do not invent a URL or create a replacement tracker." : "";
-    const changes = /\b(?:and|then)\s+(?:send|reply|forward|upload|fill|submit|book|schedule|update|edit|change|delete|save|click|type|press|create|add)\b/i.test(target);
     const request = "In my Chrome, " + (changes ? "execute this task: open " : "open ") + target + tracker;
     return { request, intent: parsePcIntent(request)! };
   }

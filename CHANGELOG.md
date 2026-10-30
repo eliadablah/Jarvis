@@ -1,5 +1,33 @@
 # Changelog
 
+## 2026-10-30
+
+### Feature - Perplexity as a chat engine
+
+- New engine next to Claude, Codex and Gemini (`app/src/brain/perplexity.ts`), using Perplexity's Agent API (`POST /v1/agent`, streaming) with `fetch` and no new dependency. Answers use live web search; the sources appear under the answer and the numbered citation markers are stripped from the text (even when split across chunks). Follow-ups continue through `previous_response_id`; a thread Perplexity no longer knows is asked again fresh.
+- Picker: a Perplexity option in the model picker and the dashboard's Auto/Claude/Codex/Gemini/Perplexity list and the Models & permissions panel, disabled until `PERPLEXITY_API_KEY` is set. Auto picks it only for live web questions ("latest news about", "search the web", weather, scores, current prices) and never uses it as a fallback, because the API is billed per request.
+- Privacy and secrets: vault notes and tasks are not sent unless `PERPLEXITY_SHARE_VAULT=true` (off in `deploy/compose.yaml`). The key comes from the `PERPLEXITY_API_KEY` GitHub secret, written by `deploy/deploy.sh` into the server's deploy-user-only `.env` like the Gemini key; it is never logged or echoed in errors. Setup and settings: `docs/perplexity.md`.
+- Chose the Agent API because Perplexity's docs say Sonar chat completions support ended on 2026-09-27 and recommend the Agent API for new projects.
+- Validation: type checks clean; new `app/test/perplexity.test.ts` (stream parsing, error mapping, citation filtering, sources, request body, config, picker, Auto routing, no-fallback rule, a full streamed answer and thread continuation, refused key and empty balance with a stubbed server); 174 app tests pass. Not run against the real Perplexity API: no key was used, so the exact stream and error format is as documented, not observed. API prices were not verified.
+- Needs: create a Perplexity API key and set the secret (`gh secret set PERPLEXITY_API_KEY`), then push to dev.
+
+### Feature - Send work to the engine that has run fewer tasks
+
+- When Claude Code has run more tasks than Codex lately, new work now goes to Codex first (and the other way round). `providerLoad` in `app/src/pcTasks/store.ts` counts each engine's tasks from the last 24 hours (running ones included) and `claimNextPcTask` sends the counts with the claim. `chooseAgents` in `pc-worker/agents.ts` sorts the ready, capable engines by that count first, then by usage headroom, then by the old order. The live view says why ("Claude has run 5 tasks in the last day and Codex 2, so Codex takes this one.").
+- Unchanged: only engines that can do the task and are not on cooldown or at the 90% reserve are considered, and fallback to the other engine on a failure before any action still works. Hands treats malformed counts as zero.
+- Previously the choice only looked at usage-limit headroom, so one engine could take every task while the other sat idle.
+- Validation: new `pc-worker/loadBalance.test.ts` (order by count, ties, unavailable engines, the 24 hour window, counts on a real claim, bad numbers); 78 worker tests and 162 app tests pass. Not yet seen on a real run. Restart idle Hands to load it.
+
+### Feature - Quick lane: open links and apps while a long task runs
+
+- Asking Jarvis to "open my job tracker Google Sheet at ..." while a job run was going did nothing: Hands takes one task at a time and the open request queued behind the run, and chat just reported the PC as blocked.
+- New second lane in Hands (`quickPass` / `quickLoop` in `pc-worker/worker.ts`) for desktop tasks only. It claims with `lane: "quick"` (`claimNextPcTask` in `app/src/pcTasks/store.ts`): the quick lane runs while a long task runs, one quick task at a time, and a running quick task never blocks the main lane. Agent work is unchanged: still one at a time, so two agents never fight over Chrome or submit the same application twice.
+- New plan `{ kind: "desktop", action: "open_url" }` (request text "Open this link on my PC: <url>"). "Open <https link>", "go to", "pull up", "show me my job tracker" and "open it" (after a link in chat) now use it instead of starting an agent in Chrome. The link opens in the default browser through `rundll32 url.dll,FileProtocolHandler` as a single argument. `safeLink` allows only https, a real host name, port 443, no username or password and at most 500 characters. Requests that do more than open a page ("open it and then update the first row") and plain http links still go to an agent.
+- The server knows the tracker sheet (`JOB_TRACKER_SHEET_ID`), so "show me my job tracker" needs no link. Chat answers "Opening that link on your PC now." instead of "Queued".
+- Needs the new `quick-lane-v1` executor feature, so an old Hands leaves a link task waiting instead of failing it. Restart idle Hands to load it.
+- Changed behaviour: a bare "open https://..." used to start a Claude Chrome task; it now opens in the default browser without an agent. Two older test expectations were updated to say so.
+- Validation: type checks clean; new `pc-worker/quickLane.test.ts` (link safety, routing, claiming while a job runs, one quick task at a time, quick lane never takes agent work, old Hands waiting, `quickPass` end to end with a stubbed server and runner); 73 worker tests and 162 app tests pass. The real Windows link launch was not run, so nothing was opened on the PC.
+
 ## 2026-10-29
 
 ### Fix - Stall watchdog for silent agents

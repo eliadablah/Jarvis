@@ -16,7 +16,7 @@ export interface PcTask {
   activity?: { at: string; text: string }[];
   cancelRequested?: boolean; report?: PcReport; reportId?: string; requestId?: string;
   retryOf?: string; retryTaskId?: string;
-  requiredFeature?: "job-files-v1" | "task-sync-v1" | "personal-tools-v1" | "full-tools-v2";
+  requiredFeature?: "job-files-v1" | "task-sync-v1" | "personal-tools-v1" | "full-tools-v2" | "quick-lane-v1";
   toolProfile?: ToolProfile;
   approvals?: PcApproval[];
   applicationScope?: {rootTaskId:string;requested:number;confirmedUrls:string[];startedAt:string};
@@ -72,6 +72,8 @@ export function enqueuePcTask(dir: string, request: string, requestId?: string, 
       toolProfile,
       ...(intent.plan.kind === "jobs" && intent.plan.action === "submit" ? {requiredFeature:"task-sync-v1" as const} : {}),
       ...(toolProfile === "personal" && intent.plan.kind !== "desktop" ? {requiredFeature:"full-tools-v2" as const} : {}),
+      // An older Hands can't validate or open links; wait for one that runs the quick lane.
+      ...(intent.plan.kind === "desktop" && intent.plan.action === "open_url" ? {requiredFeature:"quick-lane-v1" as const} : {}),
       status: "queued", createdAt: now.toISOString(), ...(displayRequest ? { displayRequest: displayRequest.slice(0, MAX_REQUEST_CHARS) } : {}), ...(requestId ? { requestId } : {}) };
     state.tasks.push(task); return task;
   }, now);
@@ -101,15 +103,35 @@ export function retryPcTask(dir: string, id: string, now = new Date()): Promise<
       toolProfile: source.toolProfile ?? "scoped",
       displayRequest:"Try again: " + (source.displayRequest ?? source.request).replace(/^(?:Try again: )+/, "").slice(0,1800), ...(intent.plan.kind === "jobs" ? { requiredFeature: "task-sync-v1" as const } : {})};
     if(task.toolProfile === "personal" && task.plan?.kind !== "desktop") task.requiredFeature = "full-tools-v2";
+    if(intent.plan.kind === "desktop" && intent.plan.action === "open_url") task.requiredFeature = "quick-lane-v1";
     source.retryTaskId = task.id;
     state.tasks.push(task); return task;
   },now);
 }
-export function claimNextPcTask(dir: string, workerId: string, executors: ExecutorStatus[], now = new Date()): Promise<PcTask | undefined> {
+export interface ProviderLoad { claude: number; codex: number }
+/** How many tasks each engine has run in the last 24 hours (a running one counts), so new work can go to the engine doing less. */
+export function providerLoad(tasks: PcTask[], now = new Date()): ProviderLoad {
+  const since = now.getTime() - 24 * 60 * 60_000, load: ProviderLoad = { claude: 0, codex: 0 };
+  for (const task of tasks) {
+    if (!task.executor || !task.startedAt || Date.parse(task.startedAt) < since) continue;
+    if (task.executor.startsWith("claude-")) load.claude++; else if (task.executor.startsWith("codex-")) load.codex++;
+  }
+  return load;
+}
+/**
+ * Hands claims work in two lanes. The main lane takes one task at a time, like before, and waits while any
+ * non-desktop task runs. The quick lane takes only desktop tasks (open a link or an app): they need no agent
+ * and take seconds, so they run alongside a long task, one quick task at a time.
+ */
+export type ClaimLane = "main" | "quick";
+export function claimNextPcTask(dir: string, workerId: string, executors: ExecutorStatus[], now = new Date(), lane: ClaimLane = "main"): Promise<(PcTask & { load: ProviderLoad }) | undefined> {
   return mutate(dir, async state => {
     state.workerSeenAt = now.toISOString(); state.workerId = workerId; state.executors = executors;
-    if (state.tasks.some(t => ["running", "cancelling"].includes(t.status))) return;
-    const task = state.tasks.find(t => t.status === "queued"); if (!task) return;
+    const isDesktop = (t: PcTask) => t.plan?.kind === "desktop";
+    const running = state.tasks.filter(t => ["running", "cancelling"].includes(t.status));
+    // A quick task in flight never holds up the main lane; the quick lane only waits for another quick task.
+    if (lane === "quick" ? running.some(isDesktop) : running.some(t => !isDesktop(t))) return;
+    const task = state.tasks.find(t => t.status === "queued" && (lane === "main" || isDesktop(t))); if (!task) return;
     if (!task.plan) { task.status = "needs_input"; task.result = "Older task needs an explicit search, prepare, or submit request."; return; }
     if(task.toolProfile==="personal" && task.requiredFeature==="personal-tools-v1")task.requiredFeature="full-tools-v2";
     const candidates = executors.filter(e => e.capabilities.includes(capabilityFor(task.plan!)) && (!task.requiredFeature || e.features?.includes(task.requiredFeature)));
@@ -131,7 +153,8 @@ export function claimNextPcTask(dir: string, workerId: string, executors: Execut
       task.applicationScope={rootTaskId:root.id,requested:root.plan?.kind==="jobs"?root.plan.maxApplications:task.plan.maxApplications,confirmedUrls,startedAt:root.createdAt};
     }
     task.workerId = workerId; task.lease = randomUUID(); task.progress = "Claimed by PC; choosing an agent.";
-    return task;
+    // Sent with the claim (not saved): Hands prefers the engine that has run fewer tasks.
+    return { ...task, load: providerLoad(state.tasks, now) };
   }, now);
 }
 export function heartbeatPcTask(dir: string, id: string, workerId: string, lease: string, progress: string, executor?: string, now = new Date()) {

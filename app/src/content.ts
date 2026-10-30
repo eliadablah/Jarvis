@@ -22,6 +22,7 @@ export const content = {
   claudeLabel: "Claude",
   codexLabel: "Codex",
   geminiLabel: "Gemini",
+  perplexityLabel: "Perplexity",
   faceNames: { board: "Circuit Board", radial: "Radial", rain: "Face in the Code", neural: "Neural Core" },
   voiceOnLabel: "Voice: on",
   voiceOffLabel: "Voice: off",

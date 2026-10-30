@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { PC_PROTOCOL, emptyReport, type PcLimits, type PcReport } from "../app/src/pcTasks/protocol.ts";
 import { parsePcIntent } from "../app/src/pcTasks/intent.ts";
-import { agentStatuses, chooseAgents, canFallback, canResumeWorkspace, runAgent, type ClaimedTask, type WorkerSettings } from "./agents.ts";
+import { agentStatuses, balanceNote, chooseAgents, canFallback, canResumeWorkspace, runAgent, type ClaimedTask, type WorkerSettings } from "./agents.ts";
 import { codexSessionDirs, newerLimits, probeClaudeLimits, readCodexLimits } from "./limits.ts";
 import { readState, saveState, acquireWorkerLock, type LocalState } from "./persistence.ts";
 import { startLiveView } from "./liveView.ts";
@@ -59,6 +59,10 @@ export function validateClaim(value: unknown, workerId: string): ClaimedTask {
   const intent = parsePcIntent(task.request);
   if (task.toolProfile !== undefined && task.toolProfile !== "personal" && task.toolProfile !== "scoped") throw new Error("Unknown task tool profile.");
   if (intent?.type !== "task" || JSON.stringify(intent.plan) !== JSON.stringify(task.plan)) throw new Error("Task scope does not match its request.");
+  // The server's task counts only steer which engine goes first; anything odd is treated as zero.
+  const count = (n: unknown) => typeof n === "number" && Number.isInteger(n) && n >= 0 && n <= 100_000 ? n : 0;
+  const load = (task as { load?: Record<string, unknown> }).load;
+  if (load && typeof load === "object") task.load = { claude: count(load.claude), codex: count(load.codex) }; else delete task.load;
   return task;
 }
 export async function deliverReport(settings: WorkerSettings, state: LocalState): Promise<void> {
@@ -115,12 +119,12 @@ export async function execute(settings: WorkerSettings, state: LocalState, task:
     const steps: string[] = [];
     const attempted = new Set<string>();
     for (;;) {
-      const id = chooseAgents(task.plan, agentStatuses(settings, state.cooldowns, Date.now(), limits), limits).find(candidate => !attempted.has(candidate));
+      const id = chooseAgents(task.plan, agentStatuses(settings, state.cooldowns, Date.now(), limits), limits, Date.now(), task.load).find(candidate => !attempted.has(candidate));
       if (!id) break;
       attempted.add(id);
       if (controller.signal.aborted) break;
       if (agentStatuses(settings, state.cooldowns, Date.now(), limits).find(e => e.id === id)?.state !== "ready") continue;
-      executor = id; progress = "Starting " + id + "."; await heartbeat();
+      executor = id; progress = balanceNote(id, task.load) ?? "Starting " + id + "."; await heartbeat();
       // Each new live step is reported right away (at most every 2 seconds) so the dashboard can show the PC working.
       const run = await launch(id, settings, task, controller.signal, text => {
         progress = text;
@@ -153,6 +157,47 @@ export async function execute(settings: WorkerSettings, state: LocalState, task:
     return result;
   } finally { finished = true; stopLive(); await pump; }
 }
+/** The agents Hands reports to the server; an interrupted run pauses all of them until someone reviews it. */
+function reportedExecutors(settings: WorkerSettings, state: LocalState) {
+  return agentStatuses(settings, state.cooldowns, Date.now(), limits).map(e => state.recoveryHold ?
+    { ...e, state: "unavailable" as const, reason: "Interrupted run needs local review. Worker is paused to prevent duplicate actions." } : e);
+}
+const QUICK_POLL_MS = 3000;
+/**
+ * The quick lane. Opening a link or an app needs no agent and takes seconds, so it must not wait behind a long task such
+ * as a job run. This asks the server for one desktop task, does it, and reports. Returns true when it handled one.
+ * Safe to run next to the main loop: it only reads the worker's state and keeps none of its own, and opening a link twice is harmless.
+ */
+export async function quickPass(settings: WorkerSettings, state: LocalState, run: typeof runAgent = runAgent, retryMs = 2000): Promise<boolean> {
+  const response = await call(settings, "/api/pc/tasks/claim", { workerId: state.workerId, executors: reportedExecutors(settings, state), limits, lane: "quick" });
+  if (response.status === 204) return false;
+  if (!response.ok) throw new Error("Quick claim failed: HTTP " + response.status);
+  const task = validateClaim((await response.json() as {task: unknown}).task, state.workerId);
+  if (task.plan.kind !== "desktop") throw new Error("The quick lane only takes desktop tasks.");
+  log("quick claimed: " + task.id + " " + task.plan.action);
+  let report: PcReport;
+  try { report = (await run("windows", settings, task, new AbortController().signal, () => {})).report; }
+  catch { report = emptyReport("needs_input", "Could not open that on your PC."); }
+  const reportId = randomUUID();
+  for (let attempt = 1; ; attempt++) {
+    try {
+      const sent = await call(settings, "/api/pc/tasks/" + task.id + "/result", { workerId: state.workerId, lease: task.lease, reportId, report });
+      if (sent.ok || sent.status === 409) break; // 409: the server already closed this task
+      throw new Error("HTTP " + sent.status);
+    } catch (e) {
+      if (attempt >= 5) { log("quick report not delivered: " + task.id + " " + (e instanceof Error ? e.message : "")); break; }
+      await sleep(retryMs * attempt);
+    }
+  }
+  log("quick done: " + task.id + " " + report.outcome);
+  return true;
+}
+async function quickLoop(settings: WorkerSettings, state: LocalState): Promise<void> {
+  for (;;) {
+    try { await sleep((await quickPass(settings, state)) ? 300 : QUICK_POLL_MS); }
+    catch (e) { log("quick lane: " + (e instanceof Error ? e.message : "error")); await sleep(POLL_MS); }
+  }
+}
 async function main(): Promise<void> {
   await mkdir(STATE_DIR, { recursive: true, mode: 0o700 });
   const settings = await loadSettings();
@@ -167,6 +212,7 @@ async function main(): Promise<void> {
   }
   await saveState(STATE_DIR, state);
   log("protocol 2 started; local agents and durable reports enabled.");
+  void quickLoop(settings, state); // opens links and apps right away, next to whatever the main loop is running
   for (;;) {
     try {
       if (state.outbox) {
@@ -175,9 +221,7 @@ async function main(): Promise<void> {
         delete state.outbox; delete state.active; delete state.checkpoint; await saveState(STATE_DIR, state);
       }
       await refreshLimits(settings, true).catch(() => {});
-      const executors = agentStatuses(settings, state.cooldowns, Date.now(), limits).map(e => state.recoveryHold ?
-        { ...e, state: "unavailable" as const, reason: "Interrupted run needs local review. Worker is paused to prevent duplicate actions." } : e);
-      const response = await call(settings, "/api/pc/tasks/claim", { workerId: state.workerId, executors, limits });
+      const response = await call(settings, "/api/pc/tasks/claim", { workerId: state.workerId, executors: reportedExecutors(settings, state), limits });
       if (response.status === 204) { await sleep(POLL_MS); continue; }
       if (!response.ok) throw new Error("Claim failed: HTTP " + response.status);
       const task = validateClaim((await response.json() as {task: unknown}).task, state.workerId);

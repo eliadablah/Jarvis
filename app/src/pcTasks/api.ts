@@ -34,7 +34,7 @@ function executorsOf(value: unknown): ExecutorStatus[] {
     /^[a-z-]{1,60}$/.test(e.id) && ["ready", "cooldown", "unavailable"].includes(e.state) &&
     typeof e.reason === "string" && e.reason.length <= 300 && e.remainingTokens === null &&
     (e.retryAt === undefined || typeof e.retryAt === "string" && Number.isFinite(Date.parse(e.retryAt))) &&
-    (e.features === undefined || Array.isArray(e.features) && e.features.length <= 4 && e.features.every((f: unknown) => f === "job-files-v1" || f === "task-sync-v1" || f === "personal-tools-v1" || f === "full-tools-v2")) &&
+    (e.features === undefined || Array.isArray(e.features) && e.features.length <= 4 && e.features.every((f: unknown) => f === "job-files-v1" || f === "task-sync-v1" || f === "personal-tools-v1" || f === "full-tools-v2" || f === "quick-lane-v1")) &&
     Array.isArray(e.capabilities) && e.capabilities.length <= 4 && e.capabilities.every((c: string) => CAPABILITIES.includes(c as typeof CAPABILITIES[number]))))
     throw new ChatRequestError(400, "Invalid agent capabilities.");
   return value;
@@ -87,7 +87,7 @@ export async function handlePcTasks(req: IncomingMessage, res: ServerResponse, p
     // Usage limits ride along on claims and heartbeats; a bad reading is ignored, never an error.
     if (body.limits !== undefined) { const limits = sanitizeLimits(body.limits); if (limits.claude || limits.codex) await setPcLimits(dir, limits); }
     if (path === "/api/pc/tasks/claim") {
-      const task = await claimNextPcTask(dir, body.workerId, executorsOf(body.executors));
+      const task = await claimNextPcTask(dir, body.workerId, executorsOf(body.executors), undefined, body.lane === "quick" ? "quick" : "main");
       if (task) json(res, 200, { task }); else json(res, 204); return;
     }
     if (!match || !uuid(body.lease)) throw new ChatRequestError(400, "Invalid task claim.");

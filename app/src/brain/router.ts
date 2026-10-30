@@ -5,6 +5,7 @@ import type { ChatRequest } from "../api/chatRequest.ts";
 import { askClaude } from "./claudeCode.ts";
 import { askCodex } from "./codex.ts";
 import { askGemini } from "./gemini.ts";
+import { askPerplexity } from "./perplexity.ts";
 import { CHAT_PROVIDERS, type ChatEvent, type ChatFailureCode, type ChatProvider } from "./events.ts";
 import { connectorScope } from "./connectorConfig.ts";
 
@@ -31,9 +32,12 @@ interface RoutingOptions {
   failureCooldownMs?: number;
 }
 
-const LABELS: Record<ChatProvider, string> = { claude: "Claude", codex: "Codex", gemini: "Gemini" };
+const LABELS: Record<ChatProvider, string> = { claude: "Claude", codex: "Codex", gemini: "Gemini", perplexity: "Perplexity" };
 const label = (provider: ChatProvider): string => LABELS[provider];
-/** Order Auto tries the remaining engines in after its first choice. Gemini is the last resort. */
+/**
+ * Order Auto tries the remaining engines in after its first choice. Gemini is the last resort.
+ * Perplexity is never a fallback: its API is billed per request, so Auto uses it only when a question is picked for it.
+ */
 const FALLBACK_ORDER: readonly ChatProvider[] = ["claude", "codex", "gemini"];
 
 /** Classify the refusal without returning CLI diagnostics or credentials. */
@@ -51,6 +55,9 @@ export function preferredProvider(message: string): { provider: ChatProvider; re
   }
   if (/\b(code|coding|debug|typescript|javascript|python|repository|repo|deploy|terraform|docker|api|implement|refactor|tests?)\b/i.test(message)) {
     return { provider: "codex", reason: "Codex selected for technical work." };
+  }
+  if (/\b(latest news|news about|breaking news|search the web|look it up online|what(?:'s| is) happening|current price|stock price|weather|who won|score of)\b/i.test(message)) {
+    return { provider: "perplexity", reason: "Perplexity selected for live web answers with sources." };
   }
   if (/\b(email|inbox|summari[sz]e|rewrite|writing|draft|plan|planning|schedule|calendar|brief|research|compare)\b/i.test(message)) {
     return { provider: "claude", reason: "Claude selected for writing and planning." };
@@ -196,6 +203,8 @@ export function getChatRouter(config: AppConfig): ChatRouter {
         ask: (message, sessionId, signal, serverContext) => askCodex(config.codex!, config.claude, message, sessionId, signal, serverContext) },
       gemini: { enabled: Boolean(config.gemini?.enabled),
         ask: (message, sessionId, signal, serverContext) => askGemini(config.gemini!, config.claude, message, sessionId, signal, serverContext) },
+      perplexity: { enabled: Boolean(config.perplexity?.enabled),
+        ask: (message, sessionId, signal, serverContext) => askPerplexity(config.perplexity!, config.claude, message, sessionId, signal, serverContext) },
     });
     routers.set(config, router);
   }

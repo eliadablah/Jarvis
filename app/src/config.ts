@@ -27,6 +27,7 @@ export interface AppConfig {
   claude: ClaudeConfig;
   codex?: CodexConfig;
   gemini?: GeminiConfig;
+  perplexity?: PerplexityConfig;
   /** Shared secret for the PC worker (pc-worker/). Empty turns PC errands off. */
   pcWorkerToken: string;
   /** Read-only Google Sheets job tracker. Off until both the sheet ID and the service account key are set. */
@@ -45,6 +46,16 @@ export interface GeminiConfig {
   /** Tried once when the main model is overloaded or rate-limited (HTTP 429/500/503). */
   fallbackModel: string;
   /** Send vault excerpts and dashboard tasks to Gemini. Off by default: on Google's free tier, prompts may be used for training. */
+  shareVault: boolean;
+}
+
+export interface PerplexityConfig {
+  /** On only when an API key is present (and not switched off). The API is billed per request, separately from a Perplexity subscription. */
+  enabled: boolean;
+  apiKey: string;
+  /** Perplexity's Agent API "effort" level, a preset model plus search settings: fast (default), low, medium, high, xhigh or ultra-preview. */
+  effort: string;
+  /** Send vault excerpts and dashboard tasks to Perplexity. Off by default. */
   shareVault: boolean;
 }
 
@@ -75,6 +86,12 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
       model: source.GEMINI_MODEL?.trim() || "gemini-3.8-flash",
       fallbackModel: source.GEMINI_FALLBACK_MODEL?.trim() || "gemini-3.5-flash-lite",
       shareVault: source.GEMINI_SHARE_VAULT === "true",
+    },
+    perplexity: {
+      enabled: Boolean(source.PERPLEXITY_API_KEY?.trim()) && source.PERPLEXITY_ENABLED !== "false",
+      apiKey: source.PERPLEXITY_API_KEY?.trim() || "",
+      effort: /^[a-z0-9][a-z0-9@._-]{0,39}$/i.test(source.PERPLEXITY_EFFORT?.trim() ?? "") ? source.PERPLEXITY_EFFORT!.trim() : "fast",
+      shareVault: source.PERPLEXITY_SHARE_VAULT === "true",
     },
     pcWorkerToken: source.PC_WORKER_TOKEN?.trim() || "",
     morningRun: {

@@ -142,6 +142,22 @@ A running task shows that it is working, not just a status word. The PC activity
 
 On this PC, code injected into new processes sometimes crashes them at startup (access violation `0xC0000005` and similar). If an agent dies to one of those crash codes before it has run any tool or produced any result, nothing can have happened yet, so the worker starts it again, up to three attempts, and shows "crashed while starting, trying again" in the live view. A crash after a tool has run is never retried.
 
+## Sharing work between Claude Code and Codex
+
+Among the engines that can do a task and are ready (not on a usage cooldown), Hands picks the one that has run **fewer tasks in the last 24 hours**; a task that is running counts. If Claude has run 5 and Codex 2, the next task goes to Codex, and the live view says "Claude has run 5 tasks in the last day and Codex 2, so Codex takes this one." Equal counts fall back to the old order: most allowance left first, then the usual engine order. The server counts from each task's recorded engine and sends the numbers with every claim; Hands never trusts them for anything but the order. An engine that can't do the task, is on cooldown, or is at 90% of its limit is never chosen just because it has run less. If the first engine fails before doing anything, the other one still gets the task.
+
+## Quick lane: opening a link or an app while a long task runs
+
+Hands runs one agent task at a time on purpose: two agents driving the same Chrome, mouse and keyboard would collide, and two job runs could submit the same application twice. That used to mean "open my job tracker" waited behind a running job run.
+
+Opening something needs no agent, so it has its own lane:
+
+- **What goes there:** "open this link" (an https link, or "show me my job tracker", which uses the sheet from `JOB_TRACKER_SHEET_ID`) and Calculator, Notepad and File Explorer. Anything that has to read a page, click or type still goes to an agent and waits its turn.
+- **How:** Hands runs a second loop that asks the server for one desktop task every 3 seconds (`POST /api/pc/tasks/claim` with `lane: "quick"`) and runs it at once, next to the main task. The server lets the quick lane claim while a long task runs, one quick task at a time; the main lane still waits for the running long task. The chat reply says "Opening that link on your PC now."
+- **Safety:** only `https` links with a real host name, no username or password, no port other than 443, no numeric addresses, at most 500 characters. The link goes to Windows (`rundll32 url.dll,FileProtocolHandler`) as one argument, never through a shell, and opens in the PC's default browser. Hands reports that Windows accepted it, not that the page loaded. Opening a link twice is harmless, so the quick lane keeps no saved state; if Hands dies mid-way the task shows "PC stopped reporting" after 2 minutes.
+- **Old Hands:** a link task needs the `quick-lane-v1` feature, so a worker that hasn't been restarted leaves it waiting ("Waiting for the updated worker") instead of failing.
+- While an interrupted run is on hold, the quick lane pauses with everything else.
+
 ## Stalled agents
 
 An agent can start, connect all its tools, and then go silent. Hands now watches for that. Session bookkeeping lines (`system`, `rate_limit_event`) don't count as activity; any real output does.

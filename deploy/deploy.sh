@@ -12,6 +12,7 @@
 # a deploy-user-only .env on the server (never into the image or the repo).
 # Needs VAULT_DEPLOY_KEY: the read-only key for the private vault repo.
 # Optional GEMINI_API_KEY: turns on the Gemini engine, kept in the same .env.
+# Optional PERPLEXITY_API_KEY: turns on the Perplexity engine, kept in the same .env.
 set -euo pipefail
 
 host="$1"
@@ -42,6 +43,8 @@ ssh "${ssh_opts[@]}" "$target" 'umask 077 && cat > ~/jarvis/certs/key.pem' < cer
   printf 'CLAUDE_CODE_OAUTH_TOKEN=%s\n' "$CLAUDE_CODE_OAUTH_TOKEN"
   # Optional: the Gemini engine stays off when the secret isn't set.
   if [[ -n "${GEMINI_API_KEY:-}" ]]; then printf 'GEMINI_API_KEY=%s\n' "$GEMINI_API_KEY"; fi
+  # Optional: the Perplexity engine stays off when the secret isn't set.
+  if [[ -n "${PERPLEXITY_API_KEY:-}" ]]; then printf 'PERPLEXITY_API_KEY=%s\n' "$PERPLEXITY_API_KEY"; fi
   # Optional: lets my PC worker (pc-worker/) collect errands.
   if [[ -n "${PC_WORKER_TOKEN:-}" ]]; then printf 'PC_WORKER_TOKEN=%s\n' "$PC_WORKER_TOKEN"; fi
   # Optional: read-only Google service account (base64 JSON) for the job tracker sheet.

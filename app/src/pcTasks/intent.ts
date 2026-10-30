@@ -1,5 +1,13 @@
 import type { PcPlan } from "./protocol.ts";
 export type PcIntent = { type: "task"; plan: PcPlan } | { type: "clarify"; message: string } | { type: "cancel" };
+/** A normal https link that is safe to hand to the PC's browser: no username or password, a real host name (not an address), at most 500 characters. */
+export function safeLink(value: string): string | undefined {
+  let url: URL;
+  try { url = new URL(value.replace(/[.,;:!?)]+$/, "")); } catch { return; }
+  if (url.protocol !== "https:" || url.username || url.password || url.port && url.port !== "443") return;
+  if (!/^[a-z0-9-]+(?:\.[a-z0-9-]+)+$/i.test(url.hostname) || /^\d+(?:\.\d+){3}$/.test(url.hostname)) return;
+  return url.href.length <= 500 ? url.href : undefined;
+}
 /** Narrow action grammar: discussion, quoted commands and vague drafts never execute. */
 export function parsePcIntent(message: string): PcIntent | undefined {
   const text = message.trim().replace(/[’]/g, "'").replace(/^(?:hey\s+)?jarvis[,!:\s]+/i, "")
@@ -10,6 +18,8 @@ export function parsePcIntent(message: string): PcIntent | undefined {
   if (/\b(?:ignore|bypass|disable|override)\b.{0,35}\b(?:permission|guardrail|rule|safety|sandbox)/i.test(text)) return;
   const app = /^(?:open|launch|start) (?:my |the )?(calculator|notepad|file explorer)(?: on my (?:pc|computer))?[.!]?$/i.exec(text);
   if (app) return { type: "task", plan: { kind: "desktop", action: "open_app", app: app[1]!.toLowerCase() === "file explorer" ? "explorer" : app[1]!.toLowerCase() as "calculator" | "notepad" } };
+  const link = /^open this link on my (?:pc|computer):\s+(https:\/\/\S+)$/i.exec(text);
+  if (link) { const url = safeLink(link[1]!); return url ? { type: "task", plan: { kind: "desktop", action: "open_url", url } } : { type: "clarify", message: "Send a normal https website link without a username or password." }; }
   const workspace = /^(?:in|inside) (?:my |the )?([a-z][a-z0-9_-]{0,40}) (?:workspace|project|repo)[,:]?\s+(.+)/i.exec(text);
   if (workspace && /^(?:create|write|edit|fix|build|test|run|organize|read|summari[sz]e|review|check|list|update)\b/i.test(workspace[2]!))
     return { type: "task", plan: { kind: "workspace", action: "execute", workspace: workspace[1]!.toLowerCase() } };

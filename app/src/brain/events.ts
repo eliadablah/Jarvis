@@ -1,6 +1,6 @@
 // Events shared by the server, provider adapters, and browser.
-export type ChatProvider = "claude" | "codex" | "gemini";
-export const CHAT_PROVIDERS: readonly ChatProvider[] = ["claude", "codex", "gemini"];
+export type ChatProvider = "claude" | "codex" | "gemini" | "perplexity";
+export const CHAT_PROVIDERS: readonly ChatProvider[] = ["claude", "codex", "gemini", "perplexity"];
 export type ChatFailureCode = "quota" | "authentication" | "unavailable";
 
 export type ChatEvent =

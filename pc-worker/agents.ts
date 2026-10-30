@@ -15,7 +15,9 @@ export interface WorkerSettings {
   server: string; token: string; jobsDir: string; rufloRoot?: string; claudeBin?: string; codexBin?: string;
   windowsMcpCommand?: string; chromeMcpPython?: string; maxApplications?: number; codexHome?: string; workspaces?: Record<string, string>; lockPort?: number;
 }
-export interface ClaimedTask { id: string; request: string; plan: PcPlan; workerId: string; lease: string; toolProfile?: ToolProfile; applicationScope?: {rootTaskId:string;requested:number;confirmedUrls:string[];startedAt:string}; }
+/** Tasks each engine has run in the last 24 hours, sent by the server with every claim. */
+export interface EngineLoad { claude?: number; codex?: number }
+export interface ClaimedTask { id: string; request: string; plan: PcPlan; workerId: string; lease: string; toolProfile?: ToolProfile; load?: EngineLoad; applicationScope?: {rootTaskId:string;requested:number;confirmedUrls:string[];startedAt:string}; }
 export interface AgentRun { report: PcReport; failure?: "quota" | "authentication" | "unavailable"; safeToRetry: boolean; startupCrash?: boolean; stalled?: boolean }
 /** Windows crashes some new processes at startup on this PC; before any tool runs, trying again is safe. */
 const STARTUP_ATTEMPTS = 3;
@@ -44,17 +46,27 @@ export function agentStatuses(settings: WorkerSettings, cooldowns: Cooldowns, no
     const provider = e.id.startsWith("claude-") ? "claude" : e.id.startsWith("codex-") ? "codex" : undefined;
     const pressure = provider && quotaPressure(limits[provider], now);
     const wait = pressure ? { until: pressure, reason: "Usage is at least 90%; reserving the remaining allowance until reset." } : cooldowns[e.id];
-    return { id: e.id, capabilities: [...e.capabilities], ...(provider ? {features:["full-tools-v2" as const,...(["claude-chrome","claude-computer","codex-computer"].includes(e.id) ? ["job-files-v1" as const,"task-sync-v1" as const] : [])]} : {}), state: !e.enabled ? "unavailable" : wait && wait.until > now ? "cooldown" : "ready",
+    return { id: e.id, capabilities: [...e.capabilities], ...(e.id === "windows" ? { features: ["quick-lane-v1" as const] } : {}), ...(provider ? {features:["full-tools-v2" as const,...(["claude-chrome","claude-computer","codex-computer"].includes(e.id) ? ["job-files-v1" as const,"task-sync-v1" as const] : [])]} : {}), state: !e.enabled ? "unavailable" : wait && wait.until > now ? "cooldown" : "ready",
       reason: !e.enabled ? "Local executable not configured." : wait && wait.until > now ? wait.reason : "Ready to try; sign-in and tools are checked when used.",
       ...(wait && wait.until > now ? { retryAt: new Date(wait.until).toISOString() } : {}), remainingTokens: null };
   });
 }
-/** Capability/availability first, then the provider with the most allowance headroom. */
-export function chooseAgents(plan: PcPlan, statuses: ExecutorStatus[], limits: PcLimits = {}, now = Date.now()): string[] {
+const engineOf = (id: string) => id.startsWith("claude-") ? "claude" as const : id.startsWith("codex-") ? "codex" as const : undefined;
+/** Capability/availability first, then the engine that has run fewer tasks lately, then the one with the most allowance headroom. */
+export function chooseAgents(plan: PcPlan, statuses: ExecutorStatus[], limits: PcLimits = {}, now = Date.now(), load: EngineLoad = {}): string[] {
   const score = (id: string) => usagePressure(id.startsWith("claude-") ? limits.claude : id.startsWith("codex-") ? limits.codex : undefined, now);
+  const busy = (id: string) => { const engine = engineOf(id); return engine ? load[engine] ?? 0 : 0; };
   return statuses.filter(e => e.state === "ready" && e.capabilities.includes(capabilityFor(plan)))
-    .map((e,index)=>({id:e.id,index,pressure:score(e.id)}))
-    .sort((a,b)=>(a.pressure ?? Infinity)-(b.pressure ?? Infinity) || a.index-b.index).map(e=>e.id);
+    .map((e,index)=>({id:e.id,index,pressure:score(e.id),busy:busy(e.id)}))
+    .sort((a,b)=>a.busy-b.busy || (a.pressure ?? Infinity)-(b.pressure ?? Infinity) || a.index-b.index).map(e=>e.id);
+}
+/** A short note for the live view when the choice was made because the other engine has run more tasks. */
+export function balanceNote(id: string, load: EngineLoad = {}): string | undefined {
+  const engine = engineOf(id); if (!engine) return;
+  const other = engine === "claude" ? "codex" : "claude", mine = load[engine] ?? 0, theirs = load[other] ?? 0;
+  if (mine >= theirs) return;
+  const name = (e: "claude" | "codex") => e === "claude" ? "Claude" : "Codex";
+  return name(other) + " has run " + theirs + " task" + (theirs === 1 ? "" : "s") + " in the last day and " + name(engine) + " " + mine + ", so " + name(engine) + " takes this one.";
 }
 export function refusal(text: string): AgentRun["failure"] {
   if (/quota|rate.?limit|usage.?limit|insufficient_quota|too many requests|(?:HTTP|status|code|response)\W{0,8}429\b|hit your.{0,12}limit/i.test(text)) return "quota";
@@ -202,7 +214,7 @@ export async function runAgent(id: string, settings: WorkerSettings, task: Claim
   }
 }
 async function runAgentOnce(id: string, settings: WorkerSettings, task: ClaimedTask, signal: AbortSignal, progress: (text: string) => void, diagnostic?: (text: string) => void, onLimits?: (limits: AgentLimits) => void, continuation = ""): Promise<AgentRun> {
-  if (task.plan.kind === "desktop") return openApp(task.plan.app, signal);
+  if (task.plan.kind === "desktop") return task.plan.action === "open_url" ? openUrl(task.plan.url, signal) : openApp(task.plan.app, signal);
   let cwd = settings.jobsDir;
   if (task.plan.kind === "workspace") {
     const path = settings.workspaces?.[task.plan.workspace];
@@ -334,6 +346,22 @@ async function runAgentOnce(id: string, settings: WorkerSettings, task: ClaimedT
       } catch { settled = true; cleanup(); reject(new Error("Could not read or verify agent output; review local work before retrying.")); }
     }
   });
+}
+/** Opens one https link in the default browser. The link goes to Windows as a single argument, never through a shell. */
+async function openUrl(url: string, signal: AbortSignal): Promise<AgentRun> {
+  if (signal.aborted) return { report: emptyReport("cancelled", "Cancelled before launch."), safeToRetry: false };
+  let target: URL;
+  try { target = new URL(url); } catch { return { report: emptyReport("needs_input", "That link isn't valid."), safeToRetry: false }; }
+  if (target.protocol !== "https:" || target.username || target.password) return { report: emptyReport("needs_input", "Only plain https links are opened."), safeToRetry: false };
+  const ok = await new Promise<boolean>(resolve => {
+    const child = spawn("rundll32.exe", ["url.dll,FileProtocolHandler", target.href], { windowsHide: true, stdio: "ignore" });
+    const stop = () => { void stopTree(child); };
+    const timer = setTimeout(stop, 15_000); signal.addEventListener("abort", stop, { once: true });
+    child.once("error", () => { clearTimeout(timer); signal.removeEventListener("abort", stop); resolve(false); });
+    child.once("close", code => { clearTimeout(timer); signal.removeEventListener("abort", stop); resolve(code === 0 && !signal.aborted); });
+  });
+  return { report: ok ? { outcome: "completed", summary: "Opened " + target.hostname + " in your default browser.", evidence: [{ action: "opened", target: target.href, detail: "Windows handed the link to your default browser. Whether the page finished loading was not checked." }], submitted: 0, needsInput: [] } :
+    emptyReport("needs_input", "Could not open that link."), safeToRetry: false };
 }
 async function openApp(app: "calculator" | "notepad" | "explorer", signal: AbortSignal): Promise<AgentRun> {
   if (signal.aborted) return { report: emptyReport("cancelled", "Cancelled before launch."), safeToRetry: false };

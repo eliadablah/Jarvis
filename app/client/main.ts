@@ -45,7 +45,7 @@ function save(key: string, value: string | undefined): void {
   }
 }
 
-type Engine = "claude" | "codex" | "gemini";
+type Engine = "claude" | "codex" | "gemini" | "perplexity";
 /** The saved engine, if it's still offered on this server; otherwise Claude. */
 function pickEngine(value: string | undefined | null): Engine {
   const option = [...engineSelect.options].find(o => o.value === value);

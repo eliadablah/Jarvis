@@ -49,7 +49,8 @@ export async function handleChat(req: IncomingMessage, res: ServerResponse, conf
 
   const ids = [chat.sessionId, ...Object.values(chat.sessions ?? {})].filter((id): id is string => Boolean(id));
   const previous = ids.map(id => recentLinks.get(id)).filter(v => v && Date.now() - v.at < 30 * 60_000).sort((a,b) => b!.at - a!.at)[0];
-  const pcCommand = resolvePcCommand(chat.message, previous?.link);
+  const sheetId = config.jobTracker.sheetId;
+  const pcCommand = resolvePcCommand(chat.message, previous?.link, sheetId ? { tracker: "https://docs.google.com/spreadsheets/d/" + encodeURIComponent(sheetId) + "/edit" } : {});
   const pcIntent = pcCommand?.intent;
   if (!pcIntent && chat.provider === "codex" && !config.codex?.enabled) return sendError(res, 503, "Codex is not connected yet. Select Claude.");
   if (busy) return sendError(res, 429, "Jarvis is still answering. Try again in a moment.");

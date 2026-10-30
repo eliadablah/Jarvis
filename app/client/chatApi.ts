@@ -13,7 +13,7 @@ export async function streamChat(
   message: string,
   sessionId: string | undefined,
   onText: (text: string) => void,
-  provider: "claude" | "codex" | "gemini" = "claude",
+  provider: "claude" | "codex" | "gemini" | "perplexity" = "claude",
 ): Promise<string | undefined> {
   const res = await fetch("/api/chat", {
     method: "POST",
